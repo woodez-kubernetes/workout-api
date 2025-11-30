@@ -1,0 +1,159 @@
+████████████████████████████████████████████████████████████████
+                    WORKOUT API DEPLOYED! 🏋️
+████████████████████████████████████████████████████████████████
+
+Release Name: {{ .Release.Name }}
+Namespace: {{ .Values.namespace }}
+Chart Version: {{ .Chart.Version }}
+App Version: {{ .Chart.AppVersion }}
+
+────────────────────────────────────────────────────────────────
+
+📦 DEPLOYED RESOURCES:
+
+{{- if .Values.autoscaling.enabled }}
+  • HorizontalPodAutoscaler: {{ include "workout-api.fullname" . }}
+    Min Replicas: {{ .Values.autoscaling.minReplicas }}
+    Max Replicas: {{ .Values.autoscaling.maxReplicas }}
+{{- else }}
+  • Deployment: {{ include "workout-api.fullname" . }}
+    Replicas: {{ .Values.replicaCount }}
+{{- end }}
+  • Service: {{ include "workout-api.fullname" . }}
+  • ConfigMap: {{ include "workout-api.fullname" . }}-config
+  • Secret: {{ include "workout-api.fullname" . }}-secret
+{{- if .Values.serviceAccount.create }}
+  • ServiceAccount: {{ include "workout-api.serviceAccountName" . }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+  • Ingress: {{ include "workout-api.fullname" . }}
+{{- end }}
+
+────────────────────────────────────────────────────────────────
+
+🌐 ACCESS YOUR API:
+
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  External URL: http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Values.namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "workout-api.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Values.namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "API URL: http://$NODE_IP:$NODE_PORT/api/"
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+
+  Watch the status with:
+    kubectl get --namespace {{ .Values.namespace }} svc -w {{ include "workout-api.fullname" . }}
+
+  Once ready:
+    export SERVICE_IP=$(kubectl get svc --namespace {{ .Values.namespace }} {{ include "workout-api.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+    echo "API URL: http://$SERVICE_IP:{{ .Values.service.port }}/api/"
+{{- else if contains "ClusterIP" .Values.service.type }}
+  Port-forward to access locally:
+    kubectl --namespace {{ .Values.namespace }} port-forward svc/{{ include "workout-api.fullname" . }} 8000:{{ .Values.service.port }}
+
+  Then access at:
+    http://localhost:8000/api/
+{{- end }}
+
+────────────────────────────────────────────────────────────────
+
+🔍 HEALTH CHECK:
+
+  Health endpoint: /api/health/
+
+  Test with port-forward:
+    kubectl --namespace {{ .Values.namespace }} port-forward svc/{{ include "workout-api.fullname" . }} 8000:8000
+    curl http://localhost:8000/api/health/
+
+────────────────────────────────────────────────────────────────
+
+📊 MONITORING:
+
+  View pod status:
+    kubectl get pods -n {{ .Values.namespace }} -l app.kubernetes.io/name={{ include "workout-api.name" . }}
+
+  View logs:
+    kubectl logs -n {{ .Values.namespace }} -l app.kubernetes.io/name={{ include "workout-api.name" . }} --tail=100 -f
+
+  Describe deployment:
+    kubectl describe deployment {{ include "workout-api.fullname" . }} -n {{ .Values.namespace }}
+
+────────────────────────────────────────────────────────────────
+
+🗄️  DATABASE CONNECTIONS:
+
+  PostgreSQL:
+    Service: {{ .Values.config.postgres.host }}:{{ .Values.config.postgres.port }}
+    Database: {{ .Values.config.postgres.database }}
+    User: {{ .Values.config.postgres.username }}
+
+  MongoDB:
+    Service: {{ .Values.config.mongodb.host }}:{{ .Values.config.mongodb.port }}
+    Database: {{ .Values.config.mongodb.database }}
+{{- if .Values.config.mongodb.username }}
+    User: {{ .Values.config.mongodb.username }}
+{{- else }}
+    Authentication: Disabled
+{{- end }}
+
+────────────────────────────────────────────────────────────────
+
+⚙️  CONFIGURATION:
+
+  Debug Mode: {{ .Values.config.django.debug }}
+  Allowed Hosts: {{ .Values.config.django.allowedHosts }}
+
+{{- if not .Values.secrets.djangoSecretKey }}
+  ⚠️  WARNING: Using default Django SECRET_KEY!
+      Generate a new one with:
+        python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+
+      Then update with:
+        helm upgrade {{ .Release.Name }} ./helm/workout-api \
+          --set secrets.djangoSecretKey="YOUR-SECRET-KEY" \
+          --namespace {{ .Values.namespace }}
+{{- end }}
+
+────────────────────────────────────────────────────────────────
+
+🚀 USEFUL COMMANDS:
+
+  Upgrade release:
+    helm upgrade {{ .Release.Name }} ./helm/workout-api -n {{ .Values.namespace }}
+
+  View values:
+    helm get values {{ .Release.Name }} -n {{ .Values.namespace }}
+
+  Rollback to previous version:
+    helm rollback {{ .Release.Name }} -n {{ .Values.namespace }}
+
+  Uninstall:
+    helm uninstall {{ .Release.Name }} -n {{ .Values.namespace }}
+
+────────────────────────────────────────────────────────────────
+
+📚 NEXT STEPS:
+
+  1. Verify pods are running:
+     kubectl get pods -n {{ .Values.namespace }}
+
+  2. Check health endpoint (see above)
+
+  3. Run database migrations (if needed):
+     kubectl exec -it -n {{ .Values.namespace }} \
+       deployment/{{ include "workout-api.fullname" . }} -- \
+       python manage.py migrate
+
+  4. Create superuser (optional):
+     kubectl exec -it -n {{ .Values.namespace }} \
+       deployment/{{ include "workout-api.fullname" . }} -- \
+       python manage.py createsuperuser
+
+████████████████████████████████████████████████████████████████
+                    Happy Training! 🎉
+████████████████████████████████████████████████████████████████
