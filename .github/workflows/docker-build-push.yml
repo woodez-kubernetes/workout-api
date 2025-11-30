@@ -70,6 +70,31 @@ jobs:
       - name: Image digest
         run: echo "Image pushed with digest ${{ steps.docker_build.outputs.digest }}"
 
+      - name: Update Helm values with new image tag
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/release-dev'
+        run: |
+          # Generate new tag (branch-sha format for traceability)
+          NEW_TAG="${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
+
+          echo "Updating Helm values.yaml with new image tag: ${NEW_TAG}"
+
+          # Update the image tag in Helm values file
+          sed -i "s|tag: \".*\"|tag: \"${NEW_TAG}\"|g" helm/workout-api/values.yaml
+
+          # Configure git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+          # Commit and push the change
+          git add helm/workout-api/values.yaml
+          git commit -m "chore(helm): update image tag to ${NEW_TAG}
+
+          Updated by GitHub Actions workflow
+          Commit: ${{ github.sha }}
+          Workflow: ${{ github.workflow }} #${{ github.run_number }}"
+
+          git push
+
       - name: Create image summary
         if: github.event_name != 'pull_request'
         run: |
@@ -85,3 +110,5 @@ jobs:
           echo '```bash' >> $GITHUB_STEP_SUMMARY
           echo "docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Helm Values Updated:** helm/workout-api/values.yaml" >> $GITHUB_STEP_SUMMARY

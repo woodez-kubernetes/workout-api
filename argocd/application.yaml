@@ -1,0 +1,108 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workout-api
+  namespace: argocd
+  # Add finalizer for cascade deletion
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  # Project name
+  project: default
+
+  # Source repository
+  source:
+    # Git repository URL
+    repoURL: https://github.com/woodez-kubernetes/workout-api.git
+    # Target revision (branch/tag/commit)
+    targetRevision: release-dev
+    # Path to Helm chart
+    path: helm/workout-api
+
+    # Helm-specific configuration
+    helm:
+      # Release name
+      releaseName: workout-api
+
+      # Values files to use
+      valueFiles:
+        - values.yaml
+
+      # Override values
+      values: |
+        image:
+          repository: your-dockerhub-username/workout-api
+          tag: latest
+
+        namespace: woodez-database
+
+        config:
+          postgres:
+            host: postgres-svc
+            port: 5432
+            database: woodez-auth
+            username: workout_admin
+
+          mongodb:
+            host: mongodb-headless
+            port: 27017
+            database: workoutdb
+            username: ""
+
+        # Secrets are managed in Kubernetes directly
+        # Do not put real secrets in Git!
+        # secrets:
+        #   postgresPassword: CHANGE-IN-KUBERNETES
+        #   mongodbPassword: ""
+
+  # Destination cluster and namespace
+  destination:
+    # Kubernetes server URL (in-cluster)
+    server: https://kubernetes.default.svc
+    # Target namespace
+    namespace: woodez-database
+
+  # Sync policy
+  syncPolicy:
+    # Automated sync configuration
+    automated:
+      # Auto-create namespace if it doesn't exist
+      prune: true
+      # Automatically sync when repo changes
+      selfHeal: true
+      # Allow deletion of resources not in Git
+      allowEmpty: false
+
+    # Sync options
+    syncOptions:
+      # Create namespace if it doesn't exist
+      - CreateNamespace=true
+      # Respect ignore differences
+      - RespectIgnoreDifferences=true
+      # Server-side apply
+      - ServerSideApply=true
+
+    # Retry configuration
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Ignore differences in certain fields
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: apps
+      kind: StatefulSet
+      jsonPointers:
+        - /spec/replicas
+
+  # Health assessment
+  # ArgoCD will wait for these resources to become healthy
+  health:
+    # Custom health checks (optional)
+    # ArgoCD has built-in checks for standard Kubernetes resources

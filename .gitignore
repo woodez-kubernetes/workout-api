@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# HTML files (generated documentation)
+*.html
+
+# CLAUDE.md (user-specific Claude configuration)
+CLAUDE.md
