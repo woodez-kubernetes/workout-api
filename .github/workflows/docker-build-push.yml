@@ -20,11 +20,14 @@ jobs:
     name: Build and Push to DockerHub
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write  # Required to push commits back to repo
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITOPS_PUSH_TOKEN }}
+          token: ${{ secrets.GITOPS_PUSH_TOKEN || github.token }}
           fetch-depth: 0
 
       - name: Set up Docker Buildx
