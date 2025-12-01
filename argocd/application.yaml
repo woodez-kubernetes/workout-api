@@ -31,7 +31,7 @@ spec:
       # Override values
       values: |
         image:
-          repository: your-dockerhub-username/workout-api
+          repository: kwood475/workout-api
           tag: latest
 
         namespace: woodez-database
