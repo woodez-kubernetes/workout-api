@@ -1477,6 +1477,7 @@ Before the GitHub Actions workflow can run successfully, you must configure thes
 |-------------|----------|-------------|---------------|------------|
 | `DOCKERHUB_USERNAME` | ✅ **Yes** | Your DockerHub username | Your DockerHub account name | Docker login, image tagging |
 | `DOCKERHUB_PASSWORD` | ✅ **Yes** | DockerHub access token (NOT your password) | DockerHub → Account Settings → Security → New Access Token | Docker login |
+| `GITOPS_PUSH_TOKEN` | ✅ **Yes** | GitHub Personal Access Token with repo write permissions | GitHub → Settings → Developer settings → Personal access tokens | Git push for Helm values update |
 
 **Setup Instructions:**
 
@@ -1490,7 +1491,19 @@ Before the GitHub Actions workflow can run successfully, you must configure thes
    6. COPY THE TOKEN NOW (you'll only see it once!)
    ```
 
-2. **Add Secrets to GitHub Repository**:
+2. **Create GitHub Personal Access Token**:
+   ```
+   1. Go to: https://github.com/settings/tokens
+   2. Click: "Generate new token" → "Generate new token (classic)"
+   3. Note: workflow-gitops-push
+   4. Expiration: 90 days (or your preference)
+   5. Select scopes:
+      ✅ repo (Full control of private repositories)
+   6. Click: Generate token
+   7. COPY THE TOKEN NOW (ghp_abc123xyz...)
+   ```
+
+3. **Add Secrets to GitHub Repository**:
    ```
    1. Go to your GitHub repository
    2. Click: Settings → Secrets and variables → Actions
@@ -1503,11 +1516,16 @@ Before the GitHub Actions workflow can run successfully, you must configure thes
 
    Second Secret:
    - Name: DOCKERHUB_PASSWORD
-   - Value: dckr_pat_abc123xyz... (the token you copied)
+   - Value: dckr_pat_abc123xyz... (DockerHub token)
+   - Click: Add secret
+
+   Third Secret:
+   - Name: GITOPS_PUSH_TOKEN
+   - Value: ghp_abc123xyz... (GitHub token from step 2)
    - Click: Add secret
    ```
 
-3. **Verify Setup**:
+4. **Verify Setup**:
    ```bash
    # After adding secrets, push a commit to trigger the workflow
    git commit --allow-empty -m "test: trigger workflow"
@@ -1522,9 +1540,10 @@ Before the GitHub Actions workflow can run successfully, you must configure thes
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `Error: Username and password required` | Secrets not configured | Add both DOCKERHUB_USERNAME and DOCKERHUB_PASSWORD |
+| `Error: Username and password required` | Secrets not configured | Add DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD, and GITOPS_PUSH_TOKEN |
 | `Error: denied: requested access to the resource is denied` | Wrong username or invalid token | Verify username is correct, regenerate token |
 | `Error: unauthorized: incorrect username or password` | Using password instead of token | Use access token, not your DockerHub password |
+| `Permission denied` or `403` on git push | GITOPS_PUSH_TOKEN not configured or expired | Create GitHub Personal Access Token with `repo` scope |
 | Workflow doesn't trigger | Wrong branch | Workflow triggers on `release-dev` branch only |
 
 **Security Notes:**
