@@ -4,13 +4,6 @@ on:
   push:
     branches:
       - release-dev
-    tags:
-      - 'v*.*.*'
-  pull_request:
-    branches:
-      - release-dev
-  workflow_dispatch:
-
 env:
   DOCKER_IMAGE_NAME: workout-api
   DOCKER_REGISTRY: docker.io
