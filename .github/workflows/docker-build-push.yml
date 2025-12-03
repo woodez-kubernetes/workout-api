@@ -111,3 +111,47 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Helm Values Updated:** helm/workout-api/values.yaml" >> $GITHUB_STEP_SUMMARY
+  
+  setup_argocd_app:
+    name: Setup ArgoCD Application
+    runs-on: self-hosted
+    needs: [build-and-push]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup ArgoCD CLI
+        uses: clowdhaus/argo-cd-action@main
+        with:
+          version: 2.13.8
+
+      - name: Login to ArgoCD Server
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
+            --username ${{ secrets.ARGOCD_USERNAME }} \
+            --password ${{ secrets.ARGOCD_PASSWORD }} \
+            --insecure
+
+      - name: Add GitOps Repository to ArgoCD (If not exist)
+        id: add_repo
+        run: |
+          echo "Attempting to add repository: ${{ secrets.GIT_REPO_URL }}"
+          argocd repo add ${{ secrets.GIT_REPO_URL }} || echo "Repository likely already exists in ArgoCD, continuing..."
+
+      - name: Check if Application Exists and Create if Missing
+        run: |
+          APP_NAME="workout-api"
+          
+          if argocd app get $APP_NAME &>/dev/null; then
+            echo "ArgoCD Application '$APP_NAME' already exists."
+            argocd app sync $APP_NAME
+            echo "Application created and initial sync attempt"
+
+          else
+            echo "ArgoCD Application $APP_NAME does not exist. Creating.."
+            argocd app create $APP_NAME --file ./argocd/application.yaml
+            argocd app sync $APP_NAME
+            echo "Application created and initial sync attempt"
+          fi  
+  
