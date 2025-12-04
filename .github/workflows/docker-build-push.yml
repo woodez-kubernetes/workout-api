@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - release-dev
+
+    paths-ignore:
+      - 'helm/workout-api/values.yaml'
 env:
   DOCKER_IMAGE_NAME: workout-api
   DOCKER_REGISTRY: docker.io
@@ -153,5 +156,4 @@ jobs:
             argocd app create $APP_NAME --file ./argocd/application.yaml
             argocd app sync $APP_NAME
             echo "Application created and initial sync attempt"
-          fi  
-  
+          fi
