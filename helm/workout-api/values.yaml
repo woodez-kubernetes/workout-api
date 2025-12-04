@@ -11,7 +11,7 @@ image:
   repository: kwood475/workout-api
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion
-  tag: "release-dev-194d68b"
+  tag: "release-dev-d9e897d"
 
 # Image pull secrets (if using private registry)
 imagePullSecrets: []
