@@ -124,6 +124,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Clean up ArgoCD
+        run: |
+          if [ -d "/home/github-runner/argocd" ]; then
+            echo "Removing existing /home/github-runner/argocd directory"
+            rm -rf /home/github-runner/argocd
+          else
+            echo "/home/github-runner/argocd does not exist, proceeding."
+          fi
+
       - name: Setup ArgoCD CLI
         uses: clowdhaus/argo-cd-action@main
         with:
