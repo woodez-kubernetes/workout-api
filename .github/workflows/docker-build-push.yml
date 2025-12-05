@@ -126,7 +126,7 @@ jobs:
 
       - name: Clean up ArgoCD
         run: |
-          if [[ -d "/home/github-runner/argocd" ]]; then
+          if [[ -f "/home/github-runner/argocd" ]]; then
             echo "Removing existing /home/github-runner/argocd directory"
             rm -rf /home/github-runner/argocd
           else
