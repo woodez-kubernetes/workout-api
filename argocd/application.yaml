@@ -32,7 +32,7 @@ spec:
       values: |
         image:
           repository: kwood475/workout-api
-          tag: latest
+          # tag is controlled by values.yaml (updated by CI/CD workflow)
 
         namespace: woodez-database
 

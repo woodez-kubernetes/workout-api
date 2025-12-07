@@ -80,8 +80,15 @@ jobs:
 
           echo "Updating Helm values.yaml with new image tag: ${NEW_TAG}"
 
-          # Update the image tag in Helm values file
-          sed -i "s|tag: \".*\"|tag: \"${NEW_TAG}\"|g" helm/workout-api/values.yaml
+          # Install yq if not present
+          if ! command -v yq &> /dev/null; then
+            echo "Installing yq..."
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
+          # Update the image tag in Helm values file using yq
+          yq eval -i ".image.tag = \"${NEW_TAG}\"" helm/workout-api/values.yaml
 
           # Configure git
           git config user.name "GitHub Actions Bot"
