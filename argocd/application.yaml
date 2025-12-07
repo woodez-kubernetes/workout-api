@@ -64,14 +64,11 @@ spec:
 
   # Sync policy
   syncPolicy:
-    # Automated sync configuration
-    automated:
-      # Auto-create namespace if it doesn't exist
-      prune: true
-      # Automatically sync when repo changes
-      selfHeal: true
-      # Allow deletion of resources not in Git
-      allowEmpty: false
+    # Automated sync configuration - DISABLED
+    # automated:
+    #   prune: true
+    #   selfHeal: true
+    #   allowEmpty: false
 
     # Sync options
     syncOptions:
