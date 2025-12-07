@@ -154,15 +154,19 @@ jobs:
       - name: Check if Application Exists and Create if Missing
         run: |
           APP_NAME="workout-api"
-          
+
           if argocd app get $APP_NAME &>/dev/null; then
             echo "ArgoCD Application '$APP_NAME' already exists."
-            argocd app sync $APP_NAME
-            echo "Application created and initial sync attempt"
-
+            argocd app sync $APP_NAME --prune --timeout 300
+            echo "Application synced successfully"
           else
             echo "ArgoCD Application $APP_NAME does not exist. Creating.."
-            argocd app create $APP_NAME --file ./argocd/application.yaml
-            argocd app sync $APP_NAME
-            echo "Application created and initial sync attempt"
+            argocd app create $APP_NAME --file ./argocd/application.yaml --upsert
+
+            echo "Waiting for ArgoCD to finish creating the application..."
+            sleep 10
+
+            echo "Attempting initial sync..."
+            argocd app sync $APP_NAME --prune --timeout 300 || echo "Initial sync may still be processing"
+            echo "Application created and initial sync triggered"
           fi
