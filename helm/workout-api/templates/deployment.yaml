@@ -33,6 +33,9 @@ spec:
       serviceAccountName: {{ include "workout-api.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      volumes:
+      - name: staticfiles
+        emptyDir: {}
       containers:
       - name: {{ .Chart.Name }}
         securityContext:
@@ -121,6 +124,10 @@ spec:
             configMapKeyRef:
               name: {{ include "workout-api.fullname" . }}-config
               key: CORS_ALLOWED_ORIGINS
+
+        volumeMounts:
+        - name: staticfiles
+          mountPath: /app/staticfiles
 
         livenessProbe:
           {{- toYaml .Values.livenessProbe | nindent 12 }}
