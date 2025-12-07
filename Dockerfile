@@ -53,11 +53,12 @@ WORKDIR /app
 # Copy application code
 COPY --chown=django:django . /app/
 
+# Create directories for static files and media with proper ownership
+RUN mkdir -p /app/staticfiles /app/media && \
+    chown -R django:django /app/staticfiles /app/media
+
 # Switch to non-root user
 USER django
-
-# Create directories for static files and media as django user
-RUN mkdir -p /app/staticfiles /app/media
 
 # Expose port 8000
 EXPOSE 8000
