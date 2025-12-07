@@ -85,7 +85,7 @@ spec:
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
-              name: {{ include "workout-api.fullname" . }}-secret
+              name: postgres-auth-secret
               key: POSTGRES_PASSWORD
 
         # MongoDB configuration
