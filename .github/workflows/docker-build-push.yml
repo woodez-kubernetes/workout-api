@@ -35,24 +35,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
+      - name: Generate image tag
+        id: image_tag
+        run: |
+          # Generate tag (branch-sha format for traceability)
+          TAG="${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Generated image tag: ${TAG}"
+
       - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
           tags: |
-            # Tag as 'latest' on master/main branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            # Tag with branch name
-            type=ref,event=branch
-            # Tag with PR number
-            type=ref,event=pr
-            # Tag with git tag (semantic versioning)
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            # Tag with commit SHA
-            type=sha,prefix=sha-
+            # Custom tag format: branch-sha
+            type=raw,value=${{ steps.image_tag.outputs.tag }}
+            # Also tag as 'latest' on release-dev branch for convenience
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release-dev' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -75,8 +75,8 @@ jobs:
       - name: Update Helm values with new image tag
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/release-dev'
         run: |
-          # Generate new tag (branch-sha format for traceability)
-          NEW_TAG="${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
+          # Use the same tag generated earlier
+          NEW_TAG="${{ steps.image_tag.outputs.tag }}"
 
           echo "Updating Helm values.yaml with new image tag: ${NEW_TAG}"
 
