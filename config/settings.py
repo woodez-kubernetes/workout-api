@@ -96,7 +96,7 @@ DATABASES = {
         'PORT': config('POSTGRES_PORT', default='5432'),
     }
 }
-
+# test
 # MongoDB connection via mongoengine
 # https://docs.mongoengine.org/guide/connecting.html
 
@@ -107,8 +107,9 @@ MONGODB_SETTINGS = {
     'db': config('MONGODB_DB_NAME', default='workout_db'),
     'host': config('MONGODB_HOST', default='localhost'),
     'port': int(config('MONGODB_PORT', default=27017)),
-    'directConnection': True,  # Force direct connection, ignore replica set config
+    'replicaSet': config('MONGODB_REPLICA_SET', default='rs0'),  # Replica set name
     'serverSelectionTimeoutMS': 5000,  # Faster timeout for connection errors
+    'readPreference': 'primaryPreferred',  # Prefer primary for reads
 }
 
 # Only add authentication if credentials are provided
