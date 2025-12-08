@@ -10,7 +10,7 @@ image:
   repository: kwood475/workout-api
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion
-  tag: "release-dev-27630cd"
+  tag: "release-dev-29b9aa8"
 # Image pull secrets (if using private registry)
 imagePullSecrets: []
 nameOverride: ""
@@ -125,7 +125,6 @@ config:
     database: "workoutdb"
     # MongoDB authentication
     username: "workout_admin"
-
   # CORS configuration
   cors:
     allowedOrigins: "http://localhost:3000,http://localhost:8080"
