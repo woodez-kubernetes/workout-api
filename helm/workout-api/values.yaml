@@ -1,7 +1,7 @@
 # Default values for workout-api
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-# test
+# testing
 # Replica count for the API deployment
 replicaCount: 1
 
