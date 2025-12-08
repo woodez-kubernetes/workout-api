@@ -10,7 +10,7 @@ image:
   repository: kwood475/workout-api
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion
-  tag: "release-dev-7b9f144"
+  tag: "release-dev-27630cd"
 # Image pull secrets (if using private registry)
 imagePullSecrets: []
 nameOverride: ""
@@ -86,8 +86,8 @@ livenessProbe:
     path: /api/health/
     port: 8000
     httpHeaders:
-    - name: Host
-      value: localhost
+      - name: Host
+        value: localhost
   initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
@@ -97,8 +97,8 @@ readinessProbe:
     path: /api/health/
     port: 8000
     httpHeaders:
-    - name: Host
-      value: localhost
+      - name: Host
+        value: localhost
   initialDelaySeconds: 30
   periodSeconds: 5
   timeoutSeconds: 3
