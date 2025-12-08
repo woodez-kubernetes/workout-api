@@ -4,20 +4,17 @@
 # testing
 # Replica count for the API deployment
 replicaCount: 1
-
 # Container image configuration
 image:
   # DockerHub repository (replace with your username)
   repository: kwood475/workout-api
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion
-  tag: "latest"
-
+  tag: "release-dev-27630cd"
 # Image pull secrets (if using private registry)
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
-
 # Service account configuration
 serviceAccount:
   # Specifies whether a service account should be created
@@ -26,31 +23,26 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use
   name: ""
-
 # Pod annotations
 podAnnotations: {}
-
 # Pod security context
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
   fsGroup: 1000
-
 # Container security context
 securityContext:
   capabilities:
     drop:
-    - ALL
+      - ALL
   readOnlyRootFilesystem: false
   allowPrivilegeEscalation: false
-
 # Service configuration
 service:
   type: ClusterIP
   port: 8000
   targetPort: 8000
   annotations: {}
-
 # Ingress configuration
 ingress:
   enabled: false
@@ -67,7 +59,6 @@ ingress:
     - secretName: workout-api-tls
       hosts:
         - workout-api.example.com
-
 # Resource limits and requests
 resources:
   limits:
@@ -76,7 +67,6 @@ resources:
   requests:
     cpu: 250m
     memory: 512Mi
-
 # Autoscaling configuration
 autoscaling:
   enabled: false
@@ -84,50 +74,43 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
   targetMemoryUtilizationPercentage: 80
-
 # Node selector
 nodeSelector: {}
-
 # Tolerations
 tolerations: []
-
 # Affinity rules
 affinity: {}
-
 # Liveness and readiness probes
 livenessProbe:
   httpGet:
     path: /api/health/
     port: 8000
     httpHeaders:
-    - name: Host
-      value: localhost
+      - name: Host
+        value: localhost
   initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
 readinessProbe:
   httpGet:
     path: /api/health/
     port: 8000
     httpHeaders:
-    - name: Host
-      value: localhost
+      - name: Host
+        value: localhost
   initialDelaySeconds: 30
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 3
-
 # Application configuration
 config:
   # Django settings
   django:
     debug: false
     allowedHosts: "localhost,127.0.0.1,workout-api.example.com"
-    secretKey: "CHANGE-ME-IN-PRODUCTION"  # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+    secretKey: "CHANGE-ME-IN-PRODUCTION" # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
     logLevel: "INFO"
-
   # PostgreSQL database configuration (Django auth)
   postgres:
     host: "postgres-svc"
@@ -135,7 +118,6 @@ config:
     database: "woodez-auth"
     username: "workout_admin"
     # Password should be set via secret
-
   # MongoDB configuration (Application data)
   mongodb:
     host: "mongodb-headless"
@@ -147,7 +129,6 @@ config:
   # CORS configuration
   cors:
     allowedOrigins: "http://localhost:3000,http://localhost:8080"
-
 # Secrets configuration
 # IMPORTANT: These are placeholder values only
 # DO NOT commit real secrets to Git!
@@ -163,15 +144,11 @@ secrets:
   # Django secret key
   # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
   djangoSecretKey: "CHANGE-THIS-IN-PRODUCTION"
-
   # PostgreSQL password
   postgresPassword: "CHANGE-THIS-IN-PRODUCTION"
-
   # MongoDB password (leave empty if no auth)
   mongodbPassword: ""
-
 # Namespace to deploy into
 namespace: woodez-database
-
 # Environment-specific overrides
 env: production
