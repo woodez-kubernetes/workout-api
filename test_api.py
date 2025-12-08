@@ -7,7 +7,7 @@ import os
 import sys
 import django
 
-# Setup Django
+# Setup Django testing
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
