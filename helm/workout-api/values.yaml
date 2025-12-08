@@ -99,6 +99,9 @@ livenessProbe:
   httpGet:
     path: /api/health/
     port: 8000
+    httpHeaders:
+    - name: Host
+      value: localhost
   initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
@@ -108,6 +111,9 @@ readinessProbe:
   httpGet:
     path: /api/health/
     port: 8000
+    httpHeaders:
+    - name: Host
+      value: localhost
   initialDelaySeconds: 30
   periodSeconds: 5
   timeoutSeconds: 3
