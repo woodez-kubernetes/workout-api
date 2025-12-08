@@ -141,8 +141,8 @@ config:
     host: "mongodb-headless"
     port: 27017
     database: "workoutdb"
-    # Username and password are optional (leave empty if no auth)
-    username: ""
+    # MongoDB authentication
+    username: "workout_admin"
 
   # CORS configuration
   cors:

@@ -47,13 +47,11 @@ spec:
             host: mongodb-headless
             port: 27017
             database: workoutdb
-            username: ""
+            username: workout_admin
 
-        # Secrets are managed in Kubernetes directly
-        # Do not put real secrets in Git!
-        # secrets:
-        #   postgresPassword: CHANGE-IN-KUBERNETES
-        #   mongodbPassword: ""
+        # Secrets - these will be base64 encoded by Helm
+        secrets:
+          mongodbPassword: "WorkoutSecure2024"
 
   # Destination cluster and namespace
   destination:
