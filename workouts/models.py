@@ -1,24 +1,22 @@
-from mongoengine import Document, EmbeddedDocument, fields
+from django.db import models
 from django.contrib.auth.models import User
-from datetime import datetime
+from django.contrib.postgres.fields import ArrayField
 
 
-class UserProfile(Document):
+class UserProfile(models.Model):
     """
     Extended user profile for fitness tracking.
-    Linked to Django's User model via user_id.
+    Linked to Django's User model via OneToOneField.
     """
-    user_id = fields.IntField(required=True, unique=True)
-    username = fields.StringField(required=True, unique=True, max_length=150)
-    email = fields.EmailField(required=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='workout_profile')
 
     # Profile information
-    height = fields.IntField(help_text='Height in centimeters')
-    weight = fields.DecimalField(precision=2, help_text='Weight in kilograms')
-    date_of_birth = fields.DateTimeField()
+    height = models.IntegerField(null=True, blank=True, help_text='Height in centimeters')
+    weight = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text='Weight in kilograms')
+    date_of_birth = models.DateField(null=True, blank=True)
 
     # Fitness preferences
-    FITNESS_GOAL_CHOICES = (
+    FITNESS_GOAL_CHOICES = [
         ('strength', 'Strength Training'),
         ('cardio', 'Cardiovascular Health'),
         ('weight_loss', 'Weight Loss'),
@@ -26,35 +24,27 @@ class UserProfile(Document):
         ('endurance', 'Endurance'),
         ('flexibility', 'Flexibility'),
         ('general', 'General Fitness'),
-    )
-    fitness_goal = fields.StringField(choices=FITNESS_GOAL_CHOICES, default='general')
+    ]
+    fitness_goal = models.CharField(max_length=50, choices=FITNESS_GOAL_CHOICES, default='general')
 
     # Timestamps
-    created_at = fields.DateTimeField(default=datetime.utcnow)
-    updated_at = fields.DateTimeField(default=datetime.utcnow)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    meta = {
-        'collection': 'user_profiles',
-        'indexes': [
-            'user_id',
-            'username',
-            'email',
+    class Meta:
+        indexes = [
+            models.Index(fields=['user']),
         ]
-    }
 
     def __str__(self):
-        return f"Profile: {self.username}"
-
-    def save(self, *args, **kwargs):
-        self.updated_at = datetime.utcnow()
-        return super().save(*args, **kwargs)
+        return f"Profile: {self.user.username}"
 
 
-class Exercise(Document):
+class Exercise(models.Model):
     """
     Exercise library - contains all available exercises.
     """
-    CATEGORY_CHOICES = (
+    CATEGORY_CHOICES = [
         ('strength', 'Strength'),
         ('cardio', 'Cardio'),
         ('flexibility', 'Flexibility'),
@@ -62,140 +52,102 @@ class Exercise(Document):
         ('plyometric', 'Plyometric'),
         ('olympic', 'Olympic Lifting'),
         ('powerlifting', 'Powerlifting'),
-    )
+    ]
 
-    DIFFICULTY_CHOICES = (
+    DIFFICULTY_CHOICES = [
         ('beginner', 'Beginner'),
         ('intermediate', 'Intermediate'),
         ('advanced', 'Advanced'),
         ('expert', 'Expert'),
-    )
+    ]
 
-    name = fields.StringField(required=True, unique=True, max_length=200)
-    description = fields.StringField(required=True)
-    category = fields.StringField(required=True, choices=CATEGORY_CHOICES)
+    name = models.CharField(max_length=200, unique=True)
+    description = models.TextField()
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
 
     # Metadata
-    muscle_groups = fields.ListField(fields.StringField(max_length=50))  # e.g., ['chest', 'triceps']
-    equipment_required = fields.ListField(fields.StringField(max_length=50))  # e.g., ['barbell', 'bench']
-    difficulty = fields.StringField(required=True, choices=DIFFICULTY_CHOICES)
+    muscle_groups = ArrayField(models.CharField(max_length=50), default=list, blank=True)
+    equipment_required = ArrayField(models.CharField(max_length=100), default=list, blank=True)
+    difficulty = models.CharField(max_length=50, choices=DIFFICULTY_CHOICES)
 
     # Media
-    video_url = fields.URLField()
-    image_url = fields.URLField()
+    video_url = models.URLField(blank=True)
+    image_url = models.URLField(blank=True)
 
     # Instructions
-    instructions = fields.ListField(fields.StringField())  # Step-by-step instructions
+    instructions = ArrayField(models.TextField(), default=list, blank=True)
 
     # Timestamps
-    created_at = fields.DateTimeField(default=datetime.utcnow)
-    updated_at = fields.DateTimeField(default=datetime.utcnow)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    meta = {
-        'collection': 'exercises',
-        'indexes': [
-            'name',
-            'category',
-            'difficulty',
-            ('category', 'difficulty'),
+    class Meta:
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['category']),
+            models.Index(fields=['difficulty']),
+            models.Index(fields=['category', 'difficulty']),
         ]
-    }
 
     def __str__(self):
         return f"{self.name} ({self.category})"
 
-    def save(self, *args, **kwargs):
-        self.updated_at = datetime.utcnow()
-        return super().save(*args, **kwargs)
 
-
-class WorkoutExercise(EmbeddedDocument):
-    """
-    Embedded document representing an exercise within a workout.
-    This is not a standalone collection, but embedded in Workout.
-    """
-    exercise = fields.ReferenceField(Exercise, required=True)
-    order = fields.IntField(required=True, min_value=1)
-
-    # Sets and reps
-    sets = fields.IntField(default=3, min_value=1)
-    reps = fields.IntField(min_value=1)  # Optional - for counted exercises
-    duration = fields.IntField(min_value=1)  # Optional - for timed exercises (seconds)
-
-    # Rest period between sets
-    rest_period = fields.IntField(default=60, help_text='Rest period in seconds')
-
-    # Additional notes
-    notes = fields.StringField()
-
-    def __str__(self):
-        return f"{self.exercise.name} - {self.sets}x{self.reps or 'timed'}"
-
-
-class Workout(Document):
+class Workout(models.Model):
     """
     Workout template/plan containing multiple exercises.
     Can be created by users and shared publicly.
     """
-    title = fields.StringField(required=True, max_length=200)
-    description = fields.StringField(required=True)
-
-    # Creator - reference to UserProfile
-    creator = fields.ReferenceField(UserProfile, required=True)
-
-    # Visibility
-    is_public = fields.BooleanField(default=False)
-
-    # Exercises in this workout (embedded documents)
-    exercises = fields.ListField(fields.EmbeddedDocumentField(WorkoutExercise))
-
-    # Workout metadata
-    estimated_duration = fields.IntField(help_text='Estimated duration in minutes')
-
-    DIFFICULTY_CHOICES = (
+    DIFFICULTY_CHOICES = [
         ('beginner', 'Beginner'),
         ('intermediate', 'Intermediate'),
         ('advanced', 'Advanced'),
         ('expert', 'Expert'),
-    )
-    difficulty = fields.StringField(required=True, choices=DIFFICULTY_CHOICES)
+    ]
+
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+
+    # Creator - reference to UserProfile
+    creator = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='workouts')
+
+    # Visibility
+    is_public = models.BooleanField(default=False)
+
+    # Workout metadata
+    estimated_duration = models.IntegerField(null=True, blank=True, help_text='Estimated duration in minutes')
+    difficulty = models.CharField(max_length=50, choices=DIFFICULTY_CHOICES)
 
     # Tags for categorization
-    tags = fields.ListField(fields.StringField(max_length=50))  # e.g., ['upper_body', 'hypertrophy']
+    tags = ArrayField(models.CharField(max_length=50), default=list, blank=True)
 
     # Timestamps
-    created_at = fields.DateTimeField(default=datetime.utcnow)
-    updated_at = fields.DateTimeField(default=datetime.utcnow)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    meta = {
-        'collection': 'workouts',
-        'indexes': [
-            'creator',
-            'is_public',
-            'difficulty',
-            'tags',
-            '-created_at',  # Descending order for recent workouts
+    class Meta:
+        indexes = [
+            models.Index(fields=['creator']),
+            models.Index(fields=['is_public']),
+            models.Index(fields=['difficulty']),
+            models.Index(fields=['-created_at']),
         ]
-    }
 
     def __str__(self):
-        return f"{self.title} by {self.creator.username}"
-
-    def save(self, *args, **kwargs):
-        self.updated_at = datetime.utcnow()
-        return super().save(*args, **kwargs)
+        return f"{self.title} by {self.creator.user.username}"
 
     def get_total_exercises(self):
         """Return the total number of exercises in this workout."""
-        return len(self.exercises)
+        return self.exercises.count()
 
     def calculate_estimated_duration(self):
         """Calculate estimated duration based on exercises."""
-        if not self.exercises:
+        workout_exercises = self.exercises.all()
+        if not workout_exercises:
             return 0
 
         total_seconds = 0
-        for workout_exercise in self.exercises:
+        for workout_exercise in workout_exercises:
             # Estimate time per exercise
             sets = workout_exercise.sets
             rest = workout_exercise.rest_period
@@ -216,111 +168,133 @@ class Workout(Document):
         return total_seconds // 60  # Convert to minutes
 
 
-class WorkoutSession(Document):
+class WorkoutExercise(models.Model):
+    """
+    Represents an exercise within a workout.
+    Previously an EmbeddedDocument, now a separate table with ForeignKey.
+    """
+    workout = models.ForeignKey(Workout, on_delete=models.CASCADE, related_name='exercises')
+    exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE)
+    order = models.IntegerField()
+
+    # Sets and reps
+    sets = models.IntegerField(default=3)
+    reps = models.IntegerField(null=True, blank=True)  # Optional - for counted exercises
+    duration = models.IntegerField(null=True, blank=True)  # Optional - for timed exercises (seconds)
+
+    # Rest period between sets
+    rest_period = models.IntegerField(default=60, help_text='Rest period in seconds')
+
+    # Additional notes
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['order']
+        unique_together = [['workout', 'order']]
+
+    def __str__(self):
+        return f"{self.exercise.name} - {self.sets}x{self.reps or 'timed'}"
+
+
+class WorkoutSession(models.Model):
     """
     An actual instance of a workout being performed or planned.
     Tracks when a user does a specific workout.
     """
-    STATUS_CHOICES = (
+    STATUS_CHOICES = [
         ('planned', 'Planned'),
         ('in_progress', 'In Progress'),
         ('completed', 'Completed'),
         ('skipped', 'Skipped'),
         ('cancelled', 'Cancelled'),
-    )
+    ]
 
-    user = fields.ReferenceField(UserProfile, required=True)
-    workout = fields.ReferenceField(Workout, required=True)
+    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name='sessions')
+    workout = models.ForeignKey(Workout, on_delete=models.CASCADE, related_name='sessions')
 
-    status = fields.StringField(required=True, choices=STATUS_CHOICES, default='planned')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='planned')
 
     # Scheduling
-    scheduled_date = fields.DateTimeField()
-    started_at = fields.DateTimeField()
-    completed_at = fields.DateTimeField()
+    scheduled_date = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     # User notes
-    notes = fields.StringField()
+    notes = models.TextField(blank=True)
 
     # Timestamps
-    created_at = fields.DateTimeField(default=datetime.utcnow)
-    updated_at = fields.DateTimeField(default=datetime.utcnow)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    meta = {
-        'collection': 'workout_sessions',
-        'indexes': [
-            'user',
-            'workout',
-            'status',
-            '-created_at',
-            ('user', 'status'),
-            ('user', '-completed_at'),
+    class Meta:
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['workout']),
+            models.Index(fields=['status']),
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['user', '-completed_at']),
         ]
-    }
 
     def __str__(self):
-        return f"{self.user.username} - {self.workout.title} ({self.status})"
-
-    def save(self, *args, **kwargs):
-        self.updated_at = datetime.utcnow()
-        return super().save(*args, **kwargs)
+        return f"{self.user.user.username} - {self.workout.title} ({self.status})"
 
     def start_session(self):
         """Mark session as started."""
+        from django.utils import timezone
         self.status = 'in_progress'
-        self.started_at = datetime.utcnow()
+        self.started_at = timezone.now()
         self.save()
 
     def complete_session(self):
         """Mark session as completed."""
+        from django.utils import timezone
         self.status = 'completed'
-        self.completed_at = datetime.utcnow()
+        self.completed_at = timezone.now()
         self.save()
 
     def get_duration(self):
         """Get actual duration of the session in minutes."""
         if self.started_at and self.completed_at:
             delta = self.completed_at - self.started_at
-            return delta.total_seconds() // 60
+            return delta.total_seconds() / 60
         return None
 
 
-class ExerciseLog(Document):
+class ExerciseLog(models.Model):
     """
     Log of individual exercise performance within a workout session.
     Tracks actual sets, reps, weight, etc.
     """
-    session = fields.ReferenceField(WorkoutSession, required=True)
-    exercise = fields.ReferenceField(Exercise, required=True)
+    session = models.ForeignKey(WorkoutSession, on_delete=models.CASCADE, related_name='logs')
+    exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE)
 
     # Set information
-    set_number = fields.IntField(required=True, min_value=1)
+    set_number = models.IntegerField()
 
     # Performance data
-    reps = fields.IntField(min_value=0)  # Actual reps completed
-    weight = fields.DecimalField(precision=2, min_value=0)  # Weight in kg
-    duration = fields.IntField(min_value=0)  # Duration in seconds (for timed exercises)
-    distance = fields.DecimalField(precision=2, min_value=0)  # Distance in km (for cardio)
+    reps = models.IntegerField(null=True, blank=True)  # Actual reps completed
+    weight = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # Weight in kg
+    duration = models.IntegerField(null=True, blank=True)  # Duration in seconds (for timed exercises)
+    distance = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)  # Distance in km (for cardio)
 
     # Notes for this specific set
-    notes = fields.StringField()
+    notes = models.TextField(blank=True)
 
     # Perceived difficulty (1-10 scale)
-    perceived_exertion = fields.IntField(min_value=1, max_value=10)
+    perceived_exertion = models.IntegerField(null=True, blank=True)
 
     # Timestamp
-    created_at = fields.DateTimeField(default=datetime.utcnow)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-    meta = {
-        'collection': 'exercise_logs',
-        'indexes': [
-            'session',
-            'exercise',
-            'created_at',
-            ('session', 'exercise'),
-            ('exercise', '-created_at'),  # For exercise history
+    class Meta:
+        indexes = [
+            models.Index(fields=['session']),
+            models.Index(fields=['exercise']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['session', 'exercise']),
+            models.Index(fields=['exercise', '-created_at']),
         ]
-    }
 
     def __str__(self):
         return f"{self.exercise.name} - Set {self.set_number}: {self.reps}x{self.weight}kg"

@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Django REST Framework-based workout API using a dual database architecture. The API will be deployed to a Kubernetes cluster with existing database instances.
+This is a Django REST Framework-based workout API using PostgreSQL for all data storage. The API is deployed to a Kubernetes cluster.
 
 **Tech Stack**:
 - Django 5.2 + Django REST Framework 3.16
-- PostgreSQL (for Django auth models: User, Token, Sessions)
-- MongoDB via MongoEngine (for application data models)
+- PostgreSQL (for all data: User, Token, Sessions, and application models)
+- Django ORM with PostgreSQL-specific features (ArrayField)
 - Token-based authentication (DRF TokenAuthentication)
 - Deployed on Kubernetes
 
@@ -34,7 +34,7 @@ The project uses environment variables for configuration. Copy `.env.example` to
 
 ```bash
 cp .env.example .env
-# Edit .env with your MongoDB credentials
+# Edit .env with your PostgreSQL credentials
 ```
 
 **Key Environment Variables**:
@@ -42,28 +42,21 @@ cp .env.example .env
 - `DEBUG` - Set to `False` in production
 - `ALLOWED_HOSTS` - Comma-separated list of allowed hosts
 
-**PostgreSQL (Django Auth)**:
+**PostgreSQL (All Data)**:
 - `POSTGRES_DB` - Database name (default: woodez-auth)
 - `POSTGRES_USER` - PostgreSQL username
 - `POSTGRES_PASSWORD` - PostgreSQL password
 - `POSTGRES_HOST` - PostgreSQL hostname (localhost for dev)
 - `POSTGRES_PORT` - PostgreSQL port (default: 5432)
 
-**MongoDB (Application Data)**:
-- `MONGODB_HOST` - MongoDB hostname (localhost for dev)
-- `MONGODB_PORT` - MongoDB port (default: 27017)
-- `MONGODB_DB_NAME` - Database name (default: workout_db)
-- `MONGODB_USERNAME` - MongoDB username
-- `MONGODB_PASSWORD` - MongoDB password
-
-**Connecting to K8s MongoDB locally**:
+**Connecting to K8s PostgreSQL locally**:
 ```bash
-# Port-forward MongoDB from K8s cluster
-kubectl port-forward service/mongodb-service 27012:27017
+# Port-forward PostgreSQL from K8s cluster
+kubectl port-forward service/postgres-svc 5432:5432
 
-# Then use localhost:27012 in .env
-MONGODB_HOST=localhost
-MONGODB_PORT=27012
+# Then use localhost:5432 in .env
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
 ```
 
 ## Development Commands
@@ -97,8 +90,7 @@ python manage.py createsuperuser
 python manage.py shell
 
 # Test authentication endpoints
-python test_auth_simple.py  # Tests Django/PostgreSQL auth only
-python test_auth.py         # Full tests including MongoDB (requires correct credentials)
+python test_auth_simple.py  # Tests authentication endpoints
 ```
 
 ## Project Structure
@@ -135,19 +127,26 @@ kubectl apply -f k8s/
 
 **Completed Stages**:
 - ✅ Stage 1: Project setup, virtual environment, dependencies, .env configuration
-- ✅ Stage 2: Django project initialization with dual database (PostgreSQL + MongoDB)
-- ✅ Stage 3: Data models using MongoEngine (UserProfile, Exercise, Workout, WorkoutSession, ExerciseLog)
+- ✅ Stage 2: Django project initialization with PostgreSQL database
+- ✅ Stage 3: Data models using Django ORM (UserProfile, Exercise, Workout, WorkoutExercise, WorkoutSession, ExerciseLog)
 - ✅ Stage 4: REST API endpoints with ViewSets, filtering, permissions
 - ✅ Stage 5: Authentication system (registration, login, logout, profile management)
+- ✅ Stage 6: Migration from MongoDB to PostgreSQL (single database architecture)
 
-**Current Status**: Ready for Stage 6
+**Current Status**: Ready for deployment and testing
+
+**Architecture**:
+- **Single Database**: All data stored in PostgreSQL using Django ORM
+- **Django Models**: Full Django ORM with PostgreSQL-specific features
+  - `UserProfile`: OneToOneField to User model
+  - `Exercise`: ArrayField for muscle_groups, equipment_required, instructions
+  - `Workout`: ForeignKey to UserProfile, ArrayField for tags
+  - `WorkoutExercise`: Separate model (formerly EmbeddedDocument)
+  - `WorkoutSession`: ForeignKey relationships
+  - `ExerciseLog`: ForeignKey relationships
+- **No MongoDB**: MongoEngine removed, all MongoDB configuration cleaned up
 
 **Next Steps**:
-- Stage 6: Kubernetes deployment (ConfigMaps, Secrets, Deployment, Service, Ingress)
-- Stage 7: Testing and documentation
-
-**Known Issues**:
-- MongoDB credentials in .env need to be updated to match actual database for UserProfile functionality
-- Current setup works with Django/PostgreSQL auth; MongoDB features gracefully degrade
-
-See [STAGE5_COMPLETE.md](STAGE5_COMPLETE.md) for detailed authentication implementation notes.
+- Apply migrations to production database: `python manage.py migrate`
+- Test all API endpoints
+- Kubernetes deployment (updated without MongoDB)

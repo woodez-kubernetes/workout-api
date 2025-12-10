@@ -86,14 +86,8 @@ def register(request):
             last_name=last_name
         )
 
-        # Create UserProfile
-        profile_data = {
-            'user_id': user.id,
-            'username': username,
-            'email': email,
-        }
-
-        # Add optional profile fields
+        # Create UserProfile with optional fields
+        profile_data = {}
         if request.data.get('height'):
             profile_data['height'] = request.data.get('height')
         if request.data.get('weight'):
@@ -101,17 +95,7 @@ def register(request):
         if request.data.get('fitness_goal'):
             profile_data['fitness_goal'] = request.data.get('fitness_goal')
 
-        # Try to create UserProfile in MongoDB (optional during development)
-        user_profile = None
-        profile_created = False
-        try:
-            user_profile = UserProfile(**profile_data)
-            user_profile.save()
-            profile_created = True
-        except Exception as mongo_error:
-            # Log the error but don't fail registration
-            print(f"Warning: Failed to create UserProfile in MongoDB: {mongo_error}")
-            # User can still authenticate with Django, profile creation can be retried later
+        user_profile = UserProfile.objects.create(user=user, **profile_data)
 
         # Create authentication token
         token = Token.objects.create(user=user)
@@ -125,13 +109,9 @@ def register(request):
                 'first_name': user.first_name,
                 'last_name': user.last_name,
             },
-            'token': token.key
+            'token': token.key,
+            'profile': UserProfileSerializer(user_profile).data
         }
-
-        if profile_created and user_profile:
-            response_data['profile'] = UserProfileSerializer(user_profile).data
-        else:
-            response_data['warning'] = 'User created but profile storage unavailable (MongoDB)'
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -175,27 +155,8 @@ def login(request):
     # Get or create token
     token, created = Token.objects.get_or_create(user=user)
 
-    # Get user profile (optional if MongoDB unavailable)
-    profile_data = None
-    try:
-        user_profile = UserProfile.objects.get(user_id=user.id)
-        profile_data = UserProfileSerializer(user_profile).data
-    except UserProfile.DoesNotExist:
-        # Try to create profile if it doesn't exist
-        try:
-            user_profile = UserProfile(
-                user_id=user.id,
-                username=user.username,
-                email=user.email
-            )
-            user_profile.save()
-            profile_data = UserProfileSerializer(user_profile).data
-        except Exception as mongo_error:
-            print(f"Warning: Failed to create UserProfile in MongoDB: {mongo_error}")
-            profile_data = None
-    except Exception as mongo_error:
-        print(f"Warning: Failed to access UserProfile in MongoDB: {mongo_error}")
-        profile_data = None
+    # Get or create user profile
+    user_profile, _ = UserProfile.objects.get_or_create(user=user)
 
     response_data = {
         'message': 'Login successful',
@@ -206,13 +167,9 @@ def login(request):
             'first_name': user.first_name,
             'last_name': user.last_name,
         },
-        'token': token.key
+        'token': token.key,
+        'profile': UserProfileSerializer(user_profile).data
     }
-
-    if profile_data:
-        response_data['profile'] = profile_data
-    else:
-        response_data['warning'] = 'Profile data unavailable (MongoDB connection issue)'
 
     return Response(response_data, status=status.HTTP_200_OK)
 
@@ -245,27 +202,8 @@ def get_current_user(request):
     """
     user = request.user
 
-    # Get user profile (optional if MongoDB unavailable)
-    profile_data = None
-    try:
-        user_profile = UserProfile.objects.get(user_id=user.id)
-        profile_data = UserProfileSerializer(user_profile).data
-    except UserProfile.DoesNotExist:
-        # Try to create profile if it doesn't exist
-        try:
-            user_profile = UserProfile(
-                user_id=user.id,
-                username=user.username,
-                email=user.email
-            )
-            user_profile.save()
-            profile_data = UserProfileSerializer(user_profile).data
-        except Exception as mongo_error:
-            print(f"Warning: Failed to create/access UserProfile in MongoDB: {mongo_error}")
-            profile_data = None
-    except Exception as mongo_error:
-        print(f"Warning: Failed to access UserProfile in MongoDB: {mongo_error}")
-        profile_data = None
+    # Get or create user profile
+    user_profile, _ = UserProfile.objects.get_or_create(user=user)
 
     response_data = {
         'user': {
@@ -276,13 +214,9 @@ def get_current_user(request):
             'last_name': user.last_name,
             'is_staff': user.is_staff,
             'is_superuser': user.is_superuser,
-        }
+        },
+        'profile': UserProfileSerializer(user_profile).data
     }
-
-    if profile_data:
-        response_data['profile'] = profile_data
-    else:
-        response_data['warning'] = 'Profile data unavailable (MongoDB connection issue)'
 
     return Response(response_data, status=status.HTTP_200_OK)
 
@@ -322,39 +256,20 @@ def update_profile(request):
 
     user.save()
 
-    # Update UserProfile (optional if MongoDB unavailable)
-    profile_data = None
-    profile_updated = False
-    try:
-        try:
-            user_profile = UserProfile.objects.get(user_id=user.id)
-        except UserProfile.DoesNotExist:
-            # Create profile if it doesn't exist
-            user_profile = UserProfile(
-                user_id=user.id,
-                username=user.username,
-                email=user.email
-            )
+    # Get or create and update UserProfile
+    user_profile, _ = UserProfile.objects.get_or_create(user=user)
 
-        # Update profile fields
-        if 'height' in request.data:
-            user_profile.height = request.data['height']
-        if 'weight' in request.data:
-            user_profile.weight = request.data['weight']
-        if 'date_of_birth' in request.data:
-            user_profile.date_of_birth = request.data['date_of_birth']
-        if 'fitness_goal' in request.data:
-            user_profile.fitness_goal = request.data['fitness_goal']
+    # Update profile fields
+    if 'height' in request.data:
+        user_profile.height = request.data['height']
+    if 'weight' in request.data:
+        user_profile.weight = request.data['weight']
+    if 'date_of_birth' in request.data:
+        user_profile.date_of_birth = request.data['date_of_birth']
+    if 'fitness_goal' in request.data:
+        user_profile.fitness_goal = request.data['fitness_goal']
 
-        # Update email in profile to match user
-        user_profile.email = user.email
-
-        user_profile.save()
-        profile_data = UserProfileSerializer(user_profile).data
-        profile_updated = True
-    except Exception as mongo_error:
-        print(f"Warning: Failed to update UserProfile in MongoDB: {mongo_error}")
-        # User model was still updated successfully
+    user_profile.save()
 
     response_data = {
         'message': 'Profile updated successfully',
@@ -364,13 +279,9 @@ def update_profile(request):
             'email': user.email,
             'first_name': user.first_name,
             'last_name': user.last_name,
-        }
+        },
+        'profile': UserProfileSerializer(user_profile).data
     }
-
-    if profile_updated and profile_data:
-        response_data['profile'] = profile_data
-    else:
-        response_data['warning'] = 'User updated but profile storage unavailable (MongoDB)'
 
     return Response(response_data, status=status.HTTP_200_OK)
 

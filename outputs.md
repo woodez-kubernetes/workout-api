@@ -1557,3 +1557,37 @@ After deployment:
 ---
 
 **Last Updated:** 2025-12-10 (Root cause: Replica set discovery hanging, workaround: direct connection to mongodb-1)
+
+---
+
+## 20. Frontend API Endpoint Issue - Profile 405 Error
+
+### Problem
+Frontend making GET request to `/api/auth/profile/` returns 405 Method Not Allowed.
+
+### Root Cause
+The API has two separate endpoints for profile operations:
+- **GET `/api/auth/me/`** - Get current user profile ([workouts/urls.py:32](workouts/urls.py#L32))
+- **PUT/PATCH `/api/auth/profile/`** - Update profile ([workouts/urls.py:33](workouts/urls.py#L33))
+
+The frontend is incorrectly calling `GET /api/auth/profile/` which only accepts PUT/PATCH methods.
+
+### Solution
+Frontend code needs to use the correct endpoint:
+- For getting profile: `GET /api/auth/me/`
+- For updating profile: `PUT/PATCH /api/auth/profile/`
+
+### Example Fix (Frontend)
+```typescript
+// OLD (incorrect)
+const response = await api.get('/api/auth/profile/');
+
+// NEW (correct)
+const response = await api.get('/api/auth/me/');
+```
+
+**Status:** ℹ️ Frontend issue - separate from MongoDB connection problem
+
+---
+
+**Last Updated:** 2025-12-10 (Documented frontend profile endpoint issue)

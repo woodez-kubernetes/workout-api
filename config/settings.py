@@ -97,32 +97,6 @@ DATABASES = {
     }
 }
 # test
-# MongoDB connection via mongoengine
-# https://docs.mongoengine.org/guide/connecting.html
-
-import mongoengine
-
-# Build MongoDB connection URI
-mongodb_host = config('MONGODB_HOST', default='localhost')
-mongodb_port = config('MONGODB_PORT', default='27017')
-mongodb_db = config('MONGODB_DB_NAME', default='workout_db')
-mongodb_username = config('MONGODB_USERNAME', default='')
-mongodb_password = config('MONGODB_PASSWORD', default='')
-
-# WORKAROUND: Connect directly to primary mongodb-1 to bypass hanging replica set discovery
-# The replica set discovery phase is causing connection timeouts in the Kubernetes environment
-# TODO: Investigate why replica set discovery hangs and revert to headless service once fixed
-if mongodb_username and mongodb_password:
-    # With authentication - connect directly to mongodb-1 (current primary)
-    mongo_uri = f"mongodb://{mongodb_username}:{mongodb_password}@mongodb-1:{mongodb_port}/{mongodb_db}?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000"
-else:
-    # Without authentication (local development) - use configured host
-    mongo_uri = f"mongodb://{mongodb_host}:{mongodb_port}/{mongodb_db}?directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000"
-
-# Connect to MongoDB using URI string
-mongoengine.connect(host=mongo_uri)
-
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
