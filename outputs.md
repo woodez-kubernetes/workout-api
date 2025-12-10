@@ -1063,3 +1063,107 @@ Replica set: rs0
 ---
 
 **Last Updated:** 2025-12-10 (MongoDB replica set configuration documented)
+
+---
+
+## 16. 500 Internal Server Error - New Deployment Status
+
+### Problem
+Frontend showing "Backend returns 500 Internal Server Error" when trying to access workout endpoints.
+
+### Investigation
+
+**New Pod Deployed:**
+- **Pod:** `workout-api-6466476c89-sxfp9` (replaced `workout-api-75c44ff578-vcmv5`)
+- **Image:** `kwood475/workout-api:release-dev-0b5631a`
+- **MongoDB Settings:** ✅ HAS the replica set fix (replicaSet: rs0, primaryPreferred)
+- **Status:** Running (1 restart after manual delete)
+
+**MongoDB Connection Tests:**
+
+1. **Settings Verification:** ✅
+   ```json
+   {
+     "db": "workoutdb",
+     "host": "mongodb-headless",
+     "port": 27017,
+     "replicaSet": "rs0",
+     "serverSelectionTimeoutMS": 5000,
+     "readPreference": "primaryPreferred",
+     "username": "workout_admin",
+     "password": "WorkoutSecure2024",
+     "authentication_source": "admin"
+   }
+   ```
+
+2. **Network Connectivity:** ✅
+   - Socket test to `mongodb-headless:27017` successful
+
+3. **Direct PyMongo Connection:** ✅
+   - Direct connection with replica set works perfectly
+   - Successfully retrieved MongoDB server info (version 8.2.2)
+
+4. **MongoEngine Queries:** ❌ HANGS
+   - `UserProfile.objects.count()` command hangs indefinitely
+   - Django shell queries timeout
+   - Suggests MongoEngine connection initialization issue
+
+### Root Cause Analysis
+
+The MongoDB replica set configuration is correct, and direct pymongo connections work. However, MongoEngine queries are hanging. This suggests:
+
+1. **MongoEngine Connection Pool Issue**: The connection may have been established before env vars were loaded
+2. **Django Settings Loading**: MongoEngine.connect() happens at module import time
+3. **Connection State**: Cached/stale connection information in MongoEngine
+
+### Actions Taken
+
+1. ✅ Verified new pod has MongoDB replica set fix in settings.py
+2. ✅ Confirmed direct pymongo connection works
+3. ✅ Verified UserProfile exists in MongoDB for user_id=1 (kwood)
+4. ✅ Restarted pod to reinitialize MongoEngine connection
+5. ⏳ Port-forward disconnected - needs restart to test
+
+### Current Status
+
+**Pod:** `workout-api-6466476c89-sxfp9`
+- Running with correct MongoDB settings
+- MongoEngine connection issue under investigation
+- Port-forward to localhost:8000 needs to be restarted
+
+### Next Steps
+
+1. **Restart port-forward:**
+   ```bash
+   kubectl -n woodez-database port-forward service/workout-api 8000:8000
+   ```
+
+2. **Test workout endpoint again:**
+   ```bash
+   curl -X GET http://127.0.0.1:8000/api/workouts/ \
+     -H "Authorization: Token 5892d47d03f7634023a25982f47c6cb8142a39a7"
+   ```
+
+3. **If still failing, check pod logs for MongoEngine errors:**
+   ```bash
+   kubectl logs -n woodez-database workout-api-6466476c89-sxfp9 --tail=50
+   ```
+
+4. **Possible fixes if MongoEngine still hangs:**
+   - Increase `serverSelectionTimeoutMS` from 5000 to 30000
+   - Add `directConnection=False` explicitly
+   - Check if MongoEngine version is compatible with MongoDB 8.2.2
+
+### Error Message from Frontend
+
+```
+Backend returns 500 Internal Server Error
+The response is not valid JSON (server crashed before it could return an error message)
+Frontend's fallback error handling catches it and shows {detail: 'Request failed'}
+```
+
+**This confirms:** Django is crashing/timing out before it can return a proper JSON error response.
+
+---
+
+**Last Updated:** 2025-12-10 (New deployment investigation - MongoEngine connection issue)
