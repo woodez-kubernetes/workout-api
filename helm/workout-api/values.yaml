@@ -111,20 +111,13 @@ config:
     allowedHosts: "localhost,127.0.0.1,workout-api.example.com"
     secretKey: "CHANGE-ME-IN-PRODUCTION" # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
     logLevel: "INFO"
-  # PostgreSQL database configuration (Django auth)
+  # PostgreSQL database configuration
   postgres:
     host: "postgres-svc"
     port: 5432
     database: "woodez-auth"
     username: "workout_admin"
     # Password should be set via secret
-  # MongoDB configuration (Application data)
-  mongodb:
-    host: "mongodb-headless"
-    port: 27017
-    database: "workoutdb"
-    # MongoDB authentication
-    username: "workout_admin"
 
   # CORS configuration
   cors:
@@ -146,8 +139,6 @@ secrets:
   djangoSecretKey: "CHANGE-THIS-IN-PRODUCTION"
   # PostgreSQL password
   postgresPassword: "CHANGE-THIS-IN-PRODUCTION"
-  # MongoDB password (leave empty if no auth)
-  mongodbPassword: ""
 # Namespace to deploy into
 namespace: woodez-database
 # Environment-specific overrides

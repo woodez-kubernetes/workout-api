@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from django.db.models import Q
 
-from .models import Exercise, Workout, WorkoutSession, ExerciseLog, UserProfile
+from .models import Exercise, Workout, WorkoutExercise, WorkoutSession, ExerciseLog, UserProfile
 from .serializers import (
     ExerciseSerializer,
     ExerciseListSerializer,
@@ -43,7 +43,7 @@ class ExerciseViewSet(viewsets.ViewSet):
         # Filter by muscle group
         muscle_group = self.request.query_params.get('muscle_group', None)
         if muscle_group:
-            queryset = queryset.filter(muscle_groups__in=[muscle_group])
+            queryset = queryset.filter(muscle_groups__contains=[muscle_group])
 
         # Search by name
         search = self.request.query_params.get('search', None)
@@ -179,7 +179,7 @@ class WorkoutViewSet(viewsets.ViewSet):
         if self.request.user.is_authenticated:
             # Get user profile
             try:
-                user_profile = UserProfile.objects.get(user_id=self.request.user.id)
+                user_profile = self.request.user.workout_profile
                 # Show public workouts + user's own workouts
                 queryset = Workout.objects.filter(
                     Q(is_public=True) | Q(creator=user_profile)
@@ -200,7 +200,7 @@ class WorkoutViewSet(viewsets.ViewSet):
         tags = self.request.query_params.get('tags', None)
         if tags:
             tag_list = tags.split(',')
-            queryset = queryset.filter(tags__in=tag_list)
+            queryset = queryset.filter(tags__overlap=tag_list)
 
         # Search by title
         search = self.request.query_params.get('search', None)
@@ -244,7 +244,7 @@ class WorkoutViewSet(viewsets.ViewSet):
                         status=status.HTTP_401_UNAUTHORIZED
                     )
 
-                user_profile = UserProfile.objects.get(user_id=request.user.id)
+                user_profile = request.user.workout_profile
                 if workout.creator != user_profile:
                     return Response(
                         {'error': 'You do not have permission to view this workout'},
@@ -291,7 +291,7 @@ class WorkoutViewSet(viewsets.ViewSet):
 
         try:
             workout = Workout.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             # Check if user is the creator
             if workout.creator != user_profile:
@@ -326,7 +326,7 @@ class WorkoutViewSet(viewsets.ViewSet):
 
         try:
             workout = Workout.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if workout.creator != user_profile:
                 return Response(
@@ -365,7 +365,7 @@ class WorkoutViewSet(viewsets.ViewSet):
 
         try:
             workout = Workout.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if workout.creator != user_profile:
                 return Response(
@@ -400,7 +400,7 @@ class WorkoutViewSet(viewsets.ViewSet):
 
             # Check if workout is accessible (public or owned by user)
             if not original_workout.is_public:
-                user_profile = UserProfile.objects.get(user_id=request.user.id)
+                user_profile = request.user.workout_profile
                 if original_workout.creator != user_profile:
                     return Response(
                         {'error': 'You cannot clone a private workout you do not own'},
@@ -408,16 +408,10 @@ class WorkoutViewSet(viewsets.ViewSet):
                     )
 
             # Get or create user profile
-            user_profile, _ = UserProfile.objects.get_or_create(
-                user_id=request.user.id,
-                defaults={
-                    'username': request.user.username,
-                    'email': request.user.email,
-                }
-            )
+            user_profile, _ = UserProfile.objects.get_or_create(user=request.user)
 
             # Clone the workout
-            cloned_workout = Workout(
+            cloned_workout = Workout.objects.create(
                 title=f"{original_workout.title} (Copy)",
                 description=original_workout.description,
                 creator=user_profile,
@@ -428,10 +422,17 @@ class WorkoutViewSet(viewsets.ViewSet):
             )
 
             # Clone exercises
-            for exercise in original_workout.exercises:
-                cloned_workout.exercises.append(exercise)
-
-            cloned_workout.save()
+            for workout_exercise in original_workout.exercises.all():
+                WorkoutExercise.objects.create(
+                    workout=cloned_workout,
+                    exercise=workout_exercise.exercise,
+                    order=workout_exercise.order,
+                    sets=workout_exercise.sets,
+                    reps=workout_exercise.reps,
+                    duration=workout_exercise.duration,
+                    rest_period=workout_exercise.rest_period,
+                    notes=workout_exercise.notes,
+                )
 
             return Response(
                 WorkoutSerializer(cloned_workout).data,
@@ -509,7 +510,7 @@ class WorkoutSessionViewSet(viewsets.ViewSet):
         """Retrieve a single workout session."""
         try:
             session = WorkoutSession.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             # Check if session belongs to user
             if session.user != user_profile:
@@ -546,7 +547,7 @@ class WorkoutSessionViewSet(viewsets.ViewSet):
         """Update a workout session."""
         try:
             session = WorkoutSession.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if session.user != user_profile:
                 return Response(
@@ -578,7 +579,7 @@ class WorkoutSessionViewSet(viewsets.ViewSet):
         """Partially update a workout session."""
         try:
             session = WorkoutSession.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if session.user != user_profile:
                 return Response(
@@ -611,7 +612,7 @@ class WorkoutSessionViewSet(viewsets.ViewSet):
         """Delete a workout session."""
         try:
             session = WorkoutSession.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if session.user != user_profile:
                 return Response(
@@ -637,7 +638,7 @@ class WorkoutSessionViewSet(viewsets.ViewSet):
         """Mark a workout session as started."""
         try:
             session = WorkoutSession.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if session.user != user_profile:
                 return Response(
@@ -663,7 +664,7 @@ class WorkoutSessionViewSet(viewsets.ViewSet):
         """Mark a workout session as completed."""
         try:
             session = WorkoutSession.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if session.user != user_profile:
                 return Response(
@@ -742,7 +743,7 @@ class ExerciseLogViewSet(viewsets.ViewSet):
         """Retrieve a single exercise log."""
         try:
             log = ExerciseLog.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             # Check if log belongs to user's session
             if log.session.user != user_profile:
@@ -772,7 +773,7 @@ class ExerciseLogViewSet(viewsets.ViewSet):
             session_id = request.data.get('session_id')
             try:
                 session = WorkoutSession.objects.get(id=session_id)
-                user_profile = UserProfile.objects.get(user_id=request.user.id)
+                user_profile = request.user.workout_profile
 
                 if session.user != user_profile:
                     return Response(
@@ -801,7 +802,7 @@ class ExerciseLogViewSet(viewsets.ViewSet):
         """Update an exercise log."""
         try:
             log = ExerciseLog.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if log.session.user != user_profile:
                 return Response(
@@ -829,7 +830,7 @@ class ExerciseLogViewSet(viewsets.ViewSet):
         """Partially update an exercise log."""
         try:
             log = ExerciseLog.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if log.session.user != user_profile:
                 return Response(
@@ -862,7 +863,7 @@ class ExerciseLogViewSet(viewsets.ViewSet):
         """Delete an exercise log."""
         try:
             log = ExerciseLog.objects.get(id=pk)
-            user_profile = UserProfile.objects.get(user_id=request.user.id)
+            user_profile = request.user.workout_profile
 
             if log.session.user != user_profile:
                 return Response(
