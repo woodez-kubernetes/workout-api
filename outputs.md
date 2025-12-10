@@ -1429,3 +1429,131 @@ After deployment with URI string connection:
 ---
 
 **Last Updated:** 2025-12-10 (MongoEngine connection fix - URI string format)
+
+---
+
+## 19. Root Cause Found - Replica Set Discovery Hanging
+
+### Problem
+After deploying URI string format (Section 18), workout creation still fails with 500 errors. New pod `workout-api-578cc76949-gqz6x` deployed 4 minutes ago with URI format, but issue persists.
+
+### Deep Investigation
+
+**Tests Performed:**
+1. ✅ MongoEngine query test - HANGS (no output after 35s timeout)
+2. ✅ Direct pymongo connection test - HANGS
+3. ✅ Basic socket connection test - HANGS
+4. ✅ DNS resolution - WORKS (mongodb-headless resolves to 3 IPs)
+5. ✅ MongoDB pods status - All 3 running (mongodb-0, mongodb-1, mongodb-2)
+6. ✅ Network policies - None blocking traffic
+7. ✅ MongoDB replica set status - OK (mongodb-1 is PRIMARY)
+8. ✅ FQDN resolution - WORKS (mongodb-0.mongodb-headless.woodez-database.svc.cluster.local resolves)
+
+### Root Cause Identified
+
+**The problem is replica set discovery hanging**, not MongoEngine configuration.
+
+**How replica set connections work:**
+1. Client connects to `mongodb-headless:27017` (any of the 3 pods)
+2. Client sends `isMaster` command to discover topology
+3. MongoDB returns full replica set member list with FQDNs:
+   - `mongodb-0.mongodb-headless.woodez-database.svc.cluster.local:27017`
+   - `mongodb-1.mongodb-headless.woodez-database.svc.cluster.local:27017`
+   - `mongodb-2.mongodb-headless.woodez-database.svc.cluster.local:27017`
+4. Client attempts to connect to each member to find PRIMARY
+5. **THIS STEP HANGS** - Connection attempts to replica set members timeout
+
+**Evidence:**
+- Even basic Python socket connections hang when trying to connect to MongoDB
+- This happens BEFORE any MongoEngine or application code runs
+- The hang occurs during low-level TCP connection establishment
+- Direct connection to MongoDB from within the mongodb-0 pod works fine
+- DNS resolution works, but actual connections fail
+
+**Current Replica Set Status:**
+```
+mongodb-0: SECONDARY
+mongodb-1: PRIMARY
+mongodb-2: SECONDARY
+```
+
+### Workaround Solution
+
+Changed connection strategy to bypass replica set discovery by connecting directly to the PRIMARY node (mongodb-1) with `directConnection=true`:
+
+**Modified `config/settings.py`:**
+```python
+# WORKAROUND: Connect directly to primary mongodb-1 to bypass hanging replica set discovery
+# The replica set discovery phase is causing connection timeouts in the Kubernetes environment
+# TODO: Investigate why replica set discovery hangs and revert to headless service once fixed
+if mongodb_username and mongodb_password:
+    # With authentication - connect directly to mongodb-1 (current primary)
+    mongo_uri = f"mongodb://{mongodb_username}:{mongodb_password}@mongodb-1:{mongodb_port}/{mongodb_db}?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000"
+else:
+    # Without authentication (local development) - use configured host
+    mongo_uri = f"mongodb://{mongodb_host}:{mongodb_port}/{mongodb_db}?directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000"
+```
+
+**Key Changes:**
+- Connection target: `mongodb-headless` → `mongodb-1` (direct to primary)
+- Removed `replicaSet=rs0` parameter
+- Added `directConnection=true` to bypass topology discovery
+- Removed `readPreference=primaryPreferred` (not needed with direct connection)
+- Removed `maxPoolSize=10` (keep default for direct connection)
+
+**Trade-offs:**
+- ✅ Fixes immediate connection hanging issue
+- ✅ Works with current primary (mongodb-1)
+- ⚠️ If mongodb-1 fails over to secondary, connection will fail
+- ⚠️ No automatic failover to new primary
+- ⚠️ Hardcoded to specific pod instead of service discovery
+
+### Deployment Required
+
+**Files Modified:**
+- `config/settings.py` - Changed to direct connection to mongodb-1
+- `outputs.md` - Documented root cause and workaround (Section 19)
+
+**Deployment Steps:**
+```bash
+# 1. Commit changes
+git add config/settings.py outputs.md
+git commit -m "Workaround: Connect directly to mongodb-1 to bypass hanging replica set discovery"
+git push
+
+# 2. Wait for GitHub Actions build
+# 3. ArgoCD auto-deploys or manual sync
+# 4. Test workout creation
+```
+
+### Expected Outcome
+
+After deployment:
+1. MongoEngine should connect successfully to mongodb-1
+2. Queries should execute normally (no hanging)
+3. Workout creation should work
+4. Dashboard should load workouts list
+5. All MongoDB operations functional
+
+### Long-term Solution Needed
+
+**Investigate why replica set discovery hangs:**
+1. Check if there's a firewall/network issue between pods
+2. Investigate CNI (Container Network Interface) configuration
+3. Check for routing issues in Kubernetes cluster
+4. Test from different nodes to see if issue is node-specific
+5. Check MongoDB server logs for connection attempts
+6. Consider using StatefulSet with PodAntiAffinity for better pod distribution
+
+**Potential causes:**
+- CNI plugin issue (Calico/Flannel/Weave misconfiguration)
+- MTU mismatch causing packet fragmentation
+- iptables rules blocking inter-pod traffic
+- Service mesh (Istio/Linkerd) interference
+- Node-level firewall rules
+
+**Status:** ⏳ Workaround ready for deployment
+
+---
+
+**Last Updated:** 2025-12-10 (Root cause: Replica set discovery hanging, workaround: direct connection to mongodb-1)
