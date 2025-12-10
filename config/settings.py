@@ -102,30 +102,24 @@ DATABASES = {
 
 import mongoengine
 
-# Build MongoDB connection settings
-MONGODB_SETTINGS = {
-    'db': config('MONGODB_DB_NAME', default='workout_db'),
-    'host': config('MONGODB_HOST', default='localhost'),
-    'port': int(config('MONGODB_PORT', default=27017)),
-    'replicaSet': config('MONGODB_REPLICA_SET', default='rs0'),  # Replica set name
-    'serverSelectionTimeoutMS': 30000,  # 30 second timeout (increased from 5s)
-    'connectTimeoutMS': 30000,  # Connection timeout
-    'socketTimeoutMS': 30000,  # Socket timeout for operations
-    'readPreference': 'primaryPreferred',  # Prefer primary for reads
-    'maxPoolSize': 10,  # Connection pool size
-}
-
-# Only add authentication if credentials are provided
+# Build MongoDB connection URI
+mongodb_host = config('MONGODB_HOST', default='localhost')
+mongodb_port = config('MONGODB_PORT', default='27017')
+mongodb_db = config('MONGODB_DB_NAME', default='workout_db')
 mongodb_username = config('MONGODB_USERNAME', default='')
 mongodb_password = config('MONGODB_PASSWORD', default='')
+mongodb_replica_set = config('MONGODB_REPLICA_SET', default='rs0')
 
+# Build connection URI based on whether authentication is enabled
 if mongodb_username and mongodb_password:
-    MONGODB_SETTINGS['username'] = mongodb_username
-    MONGODB_SETTINGS['password'] = mongodb_password
-    MONGODB_SETTINGS['authentication_source'] = 'admin'
+    # With authentication
+    mongo_uri = f"mongodb://{mongodb_username}:{mongodb_password}@{mongodb_host}:{mongodb_port}/{mongodb_db}?authSource=admin&replicaSet={mongodb_replica_set}&readPreference=primaryPreferred&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&maxPoolSize=10"
+else:
+    # Without authentication (local development)
+    mongo_uri = f"mongodb://{mongodb_host}:{mongodb_port}/{mongodb_db}?replicaSet={mongodb_replica_set}&readPreference=primaryPreferred&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&maxPoolSize=10"
 
-# Connect to MongoDB
-mongoengine.connect(**MONGODB_SETTINGS)
+# Connect to MongoDB using URI string
+mongoengine.connect(host=mongo_uri)
 
 
 # Password validation
