@@ -108,15 +108,16 @@ mongodb_port = config('MONGODB_PORT', default='27017')
 mongodb_db = config('MONGODB_DB_NAME', default='workout_db')
 mongodb_username = config('MONGODB_USERNAME', default='')
 mongodb_password = config('MONGODB_PASSWORD', default='')
-mongodb_replica_set = config('MONGODB_REPLICA_SET', default='rs0')
 
-# Build connection URI based on whether authentication is enabled
+# WORKAROUND: Connect directly to primary mongodb-1 to bypass hanging replica set discovery
+# The replica set discovery phase is causing connection timeouts in the Kubernetes environment
+# TODO: Investigate why replica set discovery hangs and revert to headless service once fixed
 if mongodb_username and mongodb_password:
-    # With authentication
-    mongo_uri = f"mongodb://{mongodb_username}:{mongodb_password}@{mongodb_host}:{mongodb_port}/{mongodb_db}?authSource=admin&replicaSet={mongodb_replica_set}&readPreference=primaryPreferred&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&maxPoolSize=10"
+    # With authentication - connect directly to mongodb-1 (current primary)
+    mongo_uri = f"mongodb://{mongodb_username}:{mongodb_password}@mongodb-1:{mongodb_port}/{mongodb_db}?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000"
 else:
-    # Without authentication (local development)
-    mongo_uri = f"mongodb://{mongodb_host}:{mongodb_port}/{mongodb_db}?replicaSet={mongodb_replica_set}&readPreference=primaryPreferred&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&maxPoolSize=10"
+    # Without authentication (local development) - use configured host
+    mongo_uri = f"mongodb://{mongodb_host}:{mongodb_port}/{mongodb_db}?directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000"
 
 # Connect to MongoDB using URI string
 mongoengine.connect(host=mongo_uri)
