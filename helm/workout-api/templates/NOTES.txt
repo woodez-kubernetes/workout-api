@@ -92,15 +92,6 @@ App Version: {{ .Chart.AppVersion }}
     Database: {{ .Values.config.postgres.database }}
     User: {{ .Values.config.postgres.username }}
 
-  MongoDB:
-    Service: {{ .Values.config.mongodb.host }}:{{ .Values.config.mongodb.port }}
-    Database: {{ .Values.config.mongodb.database }}
-{{- if .Values.config.mongodb.username }}
-    User: {{ .Values.config.mongodb.username }}
-{{- else }}
-    Authentication: Disabled
-{{- end }}
-
 ────────────────────────────────────────────────────────────────
 
 ⚙️  CONFIGURATION:
