@@ -108,8 +108,11 @@ MONGODB_SETTINGS = {
     'host': config('MONGODB_HOST', default='localhost'),
     'port': int(config('MONGODB_PORT', default=27017)),
     'replicaSet': config('MONGODB_REPLICA_SET', default='rs0'),  # Replica set name
-    'serverSelectionTimeoutMS': 5000,  # Faster timeout for connection errors
+    'serverSelectionTimeoutMS': 30000,  # 30 second timeout (increased from 5s)
+    'connectTimeoutMS': 30000,  # Connection timeout
+    'socketTimeoutMS': 30000,  # Socket timeout for operations
     'readPreference': 'primaryPreferred',  # Prefer primary for reads
+    'maxPoolSize': 10,  # Connection pool size
 }
 
 # Only add authentication if credentials are provided
