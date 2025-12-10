@@ -118,13 +118,6 @@ config:
     database: "woodez-auth"
     username: "workout_admin"
     # Password should be set via secret
-  # MongoDB configuration (Application data)
-  mongodb:
-    host: "mongodb-headless"
-    port: 27017
-    database: "workoutdb"
-    # MongoDB authentication
-    username: "workout_admin"
   # CORS configuration
   cors:
     allowedOrigins: "http://localhost:3000,http://localhost:8080,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
