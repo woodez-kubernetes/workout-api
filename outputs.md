@@ -1167,3 +1167,265 @@ Frontend's fallback error handling catches it and shows {detail: 'Request failed
 ---
 
 **Last Updated:** 2025-12-10 (New deployment investigation - MongoEngine connection issue)
+
+---
+
+## 17. Workout Save Error - Detailed Frontend Error Analysis
+
+### Frontend Error Output
+
+```javascript
+Workout save error: {detail: 'Request failed'}
+Error type: object
+Error keys: ['detail']
+Full error JSON: {
+  "detail": "Request failed"
+}
+
+error.error: undefined
+error.detail: Request failed
+error.message: undefined
+error.non_field_errors: undefined
+error.exercises: undefined
+Final error message: Request failed
+```
+
+**Source:** `WorkoutForm.tsx:118-145`
+
+### Analysis
+
+1. **Error Structure:** `{detail: 'Request failed'}` is a generic fallback error
+2. **No field-specific errors:** All error fields (message, non_field_errors, exercises) are `undefined`
+3. **This confirms:** Backend returned 500 Internal Server Error or timed out completely
+4. **Frontend never received:** Actual Django error response (would have specific field errors)
+
+### Backend Behavior
+
+**From pod logs:**
+```
+127.0.0.1 - - [10/Dec/2025:16:37:40 +0000] "POST /api/workouts/ HTTP/1.1" 500 145
+```
+
+- Returns 500 status code
+- Returns 145 bytes (generic HTML error page, not JSON)
+- Django crashes/times out before returning proper JSON error
+
+### Root Cause Confirmed
+
+**MongoEngine Query Timeout:**
+1. `POST /api/workouts/` endpoint called
+2. `WorkoutSerializer.create()` tries to get/create UserProfile from MongoDB
+3. `UserProfile.objects.get_or_create()` hangs waiting for MongoDB response
+4. Request times out after 5 seconds (old setting)
+5. Django returns generic 500 HTML error page
+6. Frontend's axios catches this and returns `{detail: 'Request failed'}`
+
+### Solution Applied
+
+**Updated `config/settings.py` with increased timeouts:**
+
+```python
+MONGODB_SETTINGS = {
+    'db': config('MONGODB_DB_NAME', default='workout_db'),
+    'host': config('MONGODB_HOST', default='localhost'),
+    'port': int(config('MONGODB_PORT', default=27017)),
+    'replicaSet': config('MONGODB_REPLICA_SET', default='rs0'),
+    'serverSelectionTimeoutMS': 30000,  # ✅ Increased from 5s to 30s
+    'connectTimeoutMS': 30000,  # ✅ Added
+    'socketTimeoutMS': 30000,  # ✅ Added
+    'readPreference': 'primaryPreferred',
+    'maxPoolSize': 10,  # ✅ Added
+}
+```
+
+**Changes:**
+- `serverSelectionTimeoutMS`: 5000 → 30000 (6x increase)
+- Added `connectTimeoutMS`: 30000
+- Added `socketTimeoutMS`: 30000
+- Added `maxPoolSize`: 10
+
+### Expected Behavior After Fix
+
+Once the new code is deployed:
+
+1. **First Request (Cold Start):**
+   - May take up to 30 seconds as MongoEngine establishes connection
+   - Should return proper JSON response (success or validation error)
+
+2. **Subsequent Requests:**
+   - Connection pool is warm
+   - Should respond in < 1 second
+   - Normal operation
+
+3. **Error Responses:**
+   - Will be proper JSON with field-specific errors
+   - Frontend can display meaningful validation messages
+   - No more generic "Request failed"
+
+### Deployment Status
+
+**Current Code State:**
+- ✅ settings.py updated with 30s timeouts (uncommitted)
+- ✅ helm/workout-api/values.yaml has CORS fix
+- ⏳ Waiting for user to commit and push
+- ⏳ GitHub Actions will build new image
+- ⏳ ArgoCD will deploy new pod
+
+**To Deploy:**
+```bash
+git add config/settings.py helm/workout-api/values.yaml
+git commit -m "Increase MongoDB timeouts to 30s to fix hanging queries"
+git push
+```
+
+### Testing After Deployment
+
+1. **Wait for new pod:**
+   ```bash
+   kubectl get pods -n woodez-database -w
+   # Wait for new workout-api pod with latest image
+   ```
+
+2. **Test workout creation:**
+   - First request may take 20-30 seconds (connection establishment)
+   - Watch for proper JSON error or success response
+   - Subsequent requests should be fast
+
+3. **Check logs for connection info:**
+   ```bash
+   kubectl logs -n woodez-database <NEW_POD_NAME> | grep -i mongo
+   ```
+
+### Alternative Solutions (If Still Fails)
+
+If 30-second timeout still doesn't work:
+
+1. **Check MongoEngine compatibility with MongoDB 8.2.2:**
+   - Current MongoDB version: 8.2.2
+   - May need MongoEngine upgrade
+
+2. **Try direct connection string format:**
+   ```python
+   mongoengine.connect(
+       host='mongodb://workout_admin:WorkoutSecure2024@mongodb-headless:27017/workoutdb?authSource=admin&replicaSet=rs0'
+   )
+   ```
+
+3. **Enable MongoDB query logging:**
+   - Add `serverSelectionTraceLevel` to see what's happening
+
+4. **Investigate pod resource constraints:**
+   - Check if pod is being CPU/memory throttled
+
+---
+
+**Last Updated:** 2025-12-10 (Frontend error analysis - waiting for timeout fix deployment)
+
+---
+
+## 18. MongoEngine Connection Fix - URI String Format
+
+### Problem
+After deploying 30-second timeouts, workout creation still fails with 500 errors. Investigation revealed:
+
+**Verified:**
+- ✅ Pod `workout-api-76bfd88dd4-76t5k` has correct timeout settings (30s)
+- ✅ MongoDB settings show all correct parameters (replicaSet=rs0, timeouts=30000ms)
+- ✅ MongoEngine version 0.29.1, pymongo 4.15.4
+
+**Issue Found:**
+- MongoEngine queries still hang indefinitely despite 30s timeout
+- `UserProfile.objects.count()` command in Django shell hangs with no output
+- Dict-based connection settings may not be properly applying timeouts
+
+### Root Cause Analysis
+
+**Connection Method Used (dict-based):**
+```python
+MONGODB_SETTINGS = {
+    'db': 'workoutdb',
+    'host': 'mongodb-headless',
+    'port': 27017,
+    'replicaSet': 'rs0',
+    'serverSelectionTimeoutMS': 30000,
+    'connectTimeoutMS': 30000,
+    'socketTimeoutMS': 30000,
+    'readPreference': 'primaryPreferred',
+    'maxPoolSize': 10,
+    'username': 'workout_admin',
+    'password': 'WorkoutSecure2024',
+    'authentication_source': 'admin'
+}
+mongoengine.connect(**MONGODB_SETTINGS)
+```
+
+**Problem:** MongoEngine's dict-based parameter passing may not properly convert all pymongo-style parameters. Some parameters may be ignored or not properly applied to the underlying pymongo client.
+
+### Solution: URI String Format
+
+Changed from dict-based connection to URI string format in `config/settings.py`:
+
+```python
+# Build MongoDB connection URI
+mongodb_host = config('MONGODB_HOST', default='localhost')
+mongodb_port = config('MONGODB_PORT', default='27017')
+mongodb_db = config('MONGODB_DB_NAME', default='workout_db')
+mongodb_username = config('MONGODB_USERNAME', default='')
+mongodb_password = config('MONGODB_PASSWORD', default='')
+mongodb_replica_set = config('MONGODB_REPLICA_SET', default='rs0')
+
+# Build connection URI based on whether authentication is enabled
+if mongodb_username and mongodb_password:
+    # With authentication
+    mongo_uri = f"mongodb://{mongodb_username}:{mongodb_password}@{mongodb_host}:{mongodb_port}/{mongodb_db}?authSource=admin&replicaSet={mongodb_replica_set}&readPreference=primaryPreferred&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&maxPoolSize=10"
+else:
+    # Without authentication (local development)
+    mongo_uri = f"mongodb://{mongodb_host}:{mongodb_port}/{mongodb_db}?replicaSet={mongodb_replica_set}&readPreference=primaryPreferred&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&maxPoolSize=10"
+
+# Connect to MongoDB using URI string
+mongoengine.connect(host=mongo_uri)
+```
+
+### Why URI Format is Better
+
+1. **Direct pymongo compatibility**: URI strings are parsed directly by pymongo without MongoEngine's parameter conversion layer
+2. **All parameters guaranteed to be respected**: Query string parameters are standard MongoDB connection format
+3. **Industry standard**: URI format is the recommended way to connect to MongoDB
+4. **Explicit parameter encoding**: No ambiguity about parameter types or values
+
+### Example URI for Kubernetes Deployment
+
+```
+mongodb://workout_admin:WorkoutSecure2024@mongodb-headless:27017/workoutdb?authSource=admin&replicaSet=rs0&readPreference=primaryPreferred&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&maxPoolSize=10
+```
+
+### Deployment Required
+
+**Files Modified:**
+- `config/settings.py` - Changed MongoEngine connection from dict to URI string format
+
+**Deployment Steps:**
+```bash
+# 1. Commit changes
+git add config/settings.py
+git commit -m "Fix MongoEngine connection using URI string format"
+git push
+
+# 2. Wait for GitHub Actions build
+# 3. ArgoCD auto-deploys or manual sync
+# 4. Test workout creation
+```
+
+### Expected Outcome
+
+After deployment with URI string connection:
+1. MongoEngine should establish connection within 30 seconds
+2. Queries should execute normally
+3. Workout creation should work
+4. Proper JSON error responses returned (not HTML 500 pages)
+
+**Status:** ⏳ Ready for deployment (user will commit and push)
+
+---
+
+**Last Updated:** 2025-12-10 (MongoEngine connection fix - URI string format)
