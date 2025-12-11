@@ -10,7 +10,7 @@ image:
   repository: kwood475/workout-api
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion
-  tag: "release-dev-5940c09"
+  tag: "release-dev-9cfa792"
 # Image pull secrets (if using private registry)
 imagePullSecrets: []
 nameOverride: ""
@@ -118,7 +118,6 @@ config:
     database: "woodez-auth"
     username: "workout_admin"
     # Password should be set via secret
-
   # CORS configuration
   cors:
     allowedOrigins: "http://localhost:3000,http://localhost:8080,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
