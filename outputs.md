@@ -22,14 +22,68 @@
 
 ---
 
-### 3. 🔍 Pending: 500 Internal Server Errors on workout endpoints
+### 3. ✅ Fixed: PostgreSQL Database Restored → ❌ New Issue: Authentication Failed
 
-**Status:** Requires Django server logs to diagnose
+**Original Problem:** PostgreSQL pod was stuck in Terminating state.
+**Status:** ✅ PostgreSQL is now running (`postgres-statefulset-0: Running`)
 
-**Next Steps:** Check Kubernetes pod logs:
-```bash
-kubectl logs -f deployment/workout-api -n woodez-database
+**New Problem:** workout-api pod still in CrashLoopBackOff (180 restarts)
+
+**Root Cause:** Password authentication failed
 ```
+django.db.utils.OperationalError: connection to server at "postgres-svc" (10.244.8.151),
+port 5432 failed: FATAL: password authentication failed for user "workout_admin"
+```
+
+**Solution Options:**
+
+**Option A: Update PostgreSQL to match Helm chart credentials**
+```bash
+# Connect to PostgreSQL pod
+kubectl exec -it postgres-statefulset-0 -n woodez-database -- psql -U postgres
+
+# Create user and database
+CREATE USER workout_admin WITH PASSWORD 'your-password-here';
+CREATE DATABASE "woodez-auth" OWNER workout_admin;
+GRANT ALL PRIVILEGES ON DATABASE "woodez-auth" TO workout_admin;
+\q
+```
+
+**Option B: Update Helm chart to match existing PostgreSQL credentials**
+Update `helm/workout-api/values.yaml`:
+```yaml
+config:
+  postgres:
+    username: "postgres"  # or whatever user exists in PostgreSQL
+secrets:
+  postgresPassword: "actual-postgres-password"
+```
+
+Then redeploy:
+```bash
+helm upgrade workout-api ./helm/workout-api -n woodez-database
+```
+
+---
+
+### 4. ⚠️ Frontend React Errors (Secondary Issue)
+
+**Problem:** Frontend showing errors like:
+- `Workouts.tsx:116: Cannot read properties of undefined (reading 'length')`
+- `Dashboard.tsx:426: Cannot read properties of undefined (reading 'length')`
+
+**Status:** These are frontend code issues, NOT backend API issues.
+
+**Root Cause:** React components are trying to access properties before checking if they exist:
+```typescript
+// BAD - component crashes if workouts is undefined
+workouts.map(workout => ...)
+
+// GOOD - safe access with optional chaining
+workouts?.map(workout => ...) || []
+```
+
+**Note:** These errors will persist even after the database is fixed. The frontend needs null safety checks added.
 
 ---
 
