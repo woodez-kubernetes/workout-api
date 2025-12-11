@@ -221,13 +221,14 @@ def get_current_user(request):
     return Response(response_data, status=status.HTTP_200_OK)
 
 
-@api_view(['PUT', 'PATCH'])
+@api_view(['GET', 'PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_profile(request):
     """
-    Update current user's profile.
+    GET: Retrieve current user's profile.
+    PUT/PATCH: Update current user's profile.
 
-    Request body (all fields optional):
+    Request body for PUT/PATCH (all fields optional):
     {
         "first_name": "string",
         "last_name": "string",
@@ -240,6 +241,26 @@ def update_profile(request):
     """
     user = request.user
 
+    # Get or create user profile
+    user_profile, _ = UserProfile.objects.get_or_create(user=user)
+
+    # Handle GET request
+    if request.method == 'GET':
+        response_data = {
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'is_staff': user.is_staff,
+                'is_superuser': user.is_superuser,
+            },
+            'profile': UserProfileSerializer(user_profile).data
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    # Handle PUT/PATCH request
     # Update Django User fields
     if 'first_name' in request.data:
         user.first_name = request.data['first_name']
@@ -255,9 +276,6 @@ def update_profile(request):
         user.email = request.data['email']
 
     user.save()
-
-    # Get or create and update UserProfile
-    user_profile, _ = UserProfile.objects.get_or_create(user=user)
 
     # Update profile fields
     if 'height' in request.data:

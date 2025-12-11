@@ -142,17 +142,28 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
         write_only=True
     )
     duration_minutes = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkoutSession
         fields = ['id', 'user', 'workout', 'workout_id', 'status', 'scheduled_date',
                   'started_at', 'completed_at', 'duration_minutes', 'notes',
-                  'created_at', 'updated_at']
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+                  'created_at', 'updated_at', 'date']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'date']
 
     def get_duration_minutes(self, obj):
         """Get session duration in minutes."""
         return obj.get_duration()
+
+    def get_date(self, obj):
+        """Get the session date - uses completed_at, started_at, or scheduled_date."""
+        if obj.completed_at:
+            return obj.completed_at.date().isoformat()
+        elif obj.started_at:
+            return obj.started_at.date().isoformat()
+        elif obj.scheduled_date:
+            return obj.scheduled_date.date().isoformat()
+        return obj.created_at.date().isoformat()
 
     def create(self, validated_data):
         """Create workout session."""
