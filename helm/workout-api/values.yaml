@@ -137,7 +137,7 @@ secrets:
   # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
   djangoSecretKey: "CHANGE-THIS-IN-PRODUCTION"
   # PostgreSQL password
-  postgresPassword: "CHANGE-THIS-IN-PRODUCTION"
+  postgresPassword: "jandrew28"
 # Namespace to deploy into
 namespace: woodez-database
 # Environment-specific overrides
