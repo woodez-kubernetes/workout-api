@@ -3,7 +3,7 @@ kind: Application
 metadata:
   name: workout-api
   namespace: argocd
-  # Add finalizer for cascade deletion
+  ## Add finalizer for cascade deletion
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
