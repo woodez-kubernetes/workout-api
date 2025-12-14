@@ -72,47 +72,63 @@ fields = ['id', 'exercise', 'set_number', ...]
 
 ---
 
-### 3. ✅ Fixed: PostgreSQL Database Restored → ❌ New Issue: Authentication Failed
+### 3. ✅ Fixed: PostgreSQL Data Persistence Issue
 
-**Original Problem:** PostgreSQL pod was stuck in Terminating state.
-**Status:** ✅ PostgreSQL is now running (`postgres-statefulset-0: Running`)
+**Original Problem:** PostgreSQL pod losing `workout_admin` user credentials when container restarts.
 
-**New Problem:** workout-api pod still in CrashLoopBackOff (180 restarts)
+**Root Cause:** Volume mounted at `/mnt/pgdata` but PostgreSQL storing data at `/var/lib/postgresql/data` (ephemeral container filesystem). The PGDATA environment variable was not set, so data was not persisted to the mounted volume.
 
-**Root Cause:** Password authentication failed
-```
-django.db.utils.OperationalError: connection to server at "postgres-svc" (10.244.8.151),
-port 5432 failed: FATAL: password authentication failed for user "workout_admin"
-```
+**Solution:** Added PGDATA environment variable to PostgreSQL StatefulSet to point PostgreSQL data directory to the persistent volume.
 
-**Solution Options:**
-
-**Option A: Update PostgreSQL to match Helm chart credentials**
+**Fix Applied:**
 ```bash
-# Connect to PostgreSQL pod
-kubectl exec -it postgres-statefulset-0 -n woodez-database -- psql -U postgres
+# Patch StatefulSet to add PGDATA environment variable
+kubectl patch statefulset postgres-statefulset -n woodez-database --type='json' -p='[
+  {
+    "op": "add",
+    "path": "/spec/template/spec/containers/0/env/-",
+    "value": {
+      "name": "PGDATA",
+      "value": "/mnt/pgdata/data"
+    }
+  }
+]'
 
-# Create user and database
-CREATE USER workout_admin WITH PASSWORD 'your-password-here';
-CREATE DATABASE "woodez-auth" OWNER workout_admin;
-GRANT ALL PRIVILEGES ON DATABASE "woodez-auth" TO workout_admin;
-\q
+# Delete pod to trigger recreation with new config
+kubectl delete pod postgres-statefulset-0 -n woodez-database
+
+# Create workout_admin user with full permissions
+kubectl exec -n woodez-database postgres-statefulset-0 -- psql -U postgres -c "
+CREATE USER workout_admin WITH PASSWORD 'jandrew28';
+GRANT ALL PRIVILEGES ON DATABASE \"woodez-auth\" TO workout_admin;
+GRANT ALL ON SCHEMA public TO workout_admin;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO workout_admin;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO workout_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO workout_admin;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO workout_admin;
+"
+
+# Run Django migrations
+kubectl exec -n woodez-database deployment/workout-api -- python manage.py migrate --noinput
 ```
 
-**Option B: Update Helm chart to match existing PostgreSQL credentials**
-Update `helm/workout-api/values.yaml`:
-```yaml
-config:
-  postgres:
-    username: "postgres"  # or whatever user exists in PostgreSQL
-secrets:
-  postgresPassword: "actual-postgres-password"
-```
-
-Then redeploy:
+**Verification:**
 ```bash
-helm upgrade workout-api ./helm/workout-api -n woodez-database
+# Verified PostgreSQL using persistent volume
+kubectl exec -n woodez-database postgres-statefulset-0 -- psql -U postgres -c "SHOW data_directory;"
+# Result: /mnt/pgdata/data (changed from /var/lib/postgresql/data)
+
+# Tested persistence by deleting pod
+kubectl delete pod postgres-statefulset-0 -n woodez-database
+# User persisted successfully after restart ✅
 ```
+
+**Status:** ✅ FULLY RESOLVED
+- PostgreSQL pod: `postgres-statefulset-0` Running (1/1)
+- workout-api pod: Running successfully
+- Data directory: `/mnt/pgdata/data` (on Rook Ceph persistent volume)
+- workout_admin user: Exists and persists across restarts
+- Database tables: All 17 tables created and owned by workout_admin
 
 ---
 

@@ -244,8 +244,13 @@ class ExerciseLogListSerializer(serializers.ModelSerializer):
     Lightweight serializer for listing exercise logs.
     """
     exercise = ExerciseListSerializer(read_only=True)
+    date = serializers.SerializerMethodField()
 
     class Meta:
         model = ExerciseLog
         fields = ['id', 'exercise', 'set_number', 'reps', 'weight',
-                  'duration', 'created_at']
+                  'duration', 'created_at', 'date']
+
+    def get_date(self, obj):
+        """Get the log date from created_at."""
+        return obj.created_at.date().isoformat()
