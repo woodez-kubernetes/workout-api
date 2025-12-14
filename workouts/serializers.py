@@ -243,9 +243,9 @@ class ExerciseLogListSerializer(serializers.ModelSerializer):
     """
     Lightweight serializer for listing exercise logs.
     """
-    exercise_name = serializers.CharField(source='exercise.name', read_only=True)
+    exercise = ExerciseListSerializer(read_only=True)
 
     class Meta:
         model = ExerciseLog
-        fields = ['id', 'exercise_name', 'set_number', 'reps', 'weight',
+        fields = ['id', 'exercise', 'set_number', 'reps', 'weight',
                   'duration', 'created_at']
