@@ -10,15 +10,65 @@
 
 **File:** `workouts/auth_views.py` (lines 224-304)
 
+**Status:** ✅ Deployed and working
+
 ---
 
 ### 2. ✅ Fixed: Session dates undefined
 
-**Problem:** Frontend was accessing `session.date` property, but the serializer didn't include it.
+**Problem:** Frontend was accessing `session.date` property, but the list serializer didn't include it.
 
-**Solution:** Added computed `date` field to `WorkoutSessionSerializer` that returns the most appropriate date.
+**Solution:** Added computed `date` field to both `WorkoutSessionSerializer` and `WorkoutSessionListSerializer` that returns the most appropriate date (completed_at, started_at, scheduled_date, or created_at as fallback).
 
-**File:** `workouts/serializers.py` (lines 133-166)
+**Files:**
+- `workouts/serializers.py` (lines 145, 158-166) - WorkoutSessionSerializer
+- `workouts/serializers.py` (lines 186, 196-204) - WorkoutSessionListSerializer
+
+**Status:** ✅ Deployed and working
+
+---
+
+### 3. ✅ Fixed: Exercise logs showing "Unknown Exercise"
+
+**Problem:** Frontend was displaying "Unknown Exercise" for all exercise logs because the list serializer was returning `exercise_name` (flat string) but frontend expected `exercise.name` (nested object).
+
+**Solution:** Updated `ExerciseLogListSerializer` to return full `exercise` object using `ExerciseListSerializer`, ensuring consistency with the detail serializer.
+
+**File:** `workouts/serializers.py` (lines 220-229)
+
+**Before:**
+```python
+exercise_name = serializers.CharField(source='exercise.name', read_only=True)
+fields = ['id', 'exercise_name', 'set_number', ...]
+```
+
+**After:**
+```python
+exercise = ExerciseListSerializer(read_only=True)
+fields = ['id', 'exercise', 'set_number', ...]
+```
+
+**API Response (verified on deployed pod):**
+```json
+{
+  "id": 2,
+  "exercise": {
+    "id": 1,
+    "name": "Dumbbell Bench Press",
+    "category": "strength",
+    "difficulty": "intermediate",
+    "muscle_groups": []
+  },
+  "set_number": 1,
+  "reps": 10,
+  "weight": "50.00",
+  ...
+}
+```
+
+**Status:** ✅ Deployed (image: `kwood475/workout-api:release-dev-49c9c15`)
+
+**Frontend Action Required:** The backend is returning correct data with `exercise.name = "Dumbbell Bench Press"`. If still showing "Unknown Exercise", this is a frontend code issue - check that the frontend is accessing `log.exercise.name` correctly.
 
 ---
 
