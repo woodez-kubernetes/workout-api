@@ -88,13 +88,7 @@ class ExerciseViewSet(viewsets.ViewSet):
             )
 
     def create(self, request):
-        """Create a new exercise (admin only)."""
-        if not request.user.is_staff:
-            return Response(
-                {'error': 'Only administrators can create exercises'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
+        """Create a new exercise."""
         serializer = ExerciseSerializer(data=request.data)
         if serializer.is_valid():
             exercise = serializer.save()
@@ -105,13 +99,7 @@ class ExerciseViewSet(viewsets.ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
-        """Update an exercise (admin only)."""
-        if not request.user.is_staff:
-            return Response(
-                {'error': 'Only administrators can update exercises'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
+        """Update an exercise."""
         try:
             exercise = Exercise.objects.get(id=pk)
             serializer = ExerciseSerializer(exercise, data=request.data)
@@ -126,13 +114,7 @@ class ExerciseViewSet(viewsets.ViewSet):
             )
 
     def partial_update(self, request, pk=None):
-        """Partially update an exercise (admin only)."""
-        if not request.user.is_staff:
-            return Response(
-                {'error': 'Only administrators can update exercises'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
+        """Partially update an exercise."""
         try:
             exercise = Exercise.objects.get(id=pk)
             serializer = ExerciseSerializer(exercise, data=request.data, partial=True)
@@ -147,13 +129,7 @@ class ExerciseViewSet(viewsets.ViewSet):
             )
 
     def destroy(self, request, pk=None):
-        """Delete an exercise (admin only)."""
-        if not request.user.is_staff:
-            return Response(
-                {'error': 'Only administrators can delete exercises'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
+        """Delete an exercise."""
         try:
             exercise = Exercise.objects.get(id=pk)
             exercise.delete()
