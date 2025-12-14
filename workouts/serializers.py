@@ -194,14 +194,25 @@ class WorkoutSessionListSerializer(serializers.ModelSerializer):
     """
     workout_title = serializers.CharField(source='workout.title', read_only=True)
     duration_minutes = serializers.SerializerMethodField()
+    date = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkoutSession
         fields = ['id', 'workout_title', 'status', 'scheduled_date', 'started_at',
-                  'completed_at', 'duration_minutes', 'created_at']
+                  'completed_at', 'duration_minutes', 'created_at', 'date']
 
     def get_duration_minutes(self, obj):
         return obj.get_duration()
+
+    def get_date(self, obj):
+        """Get the session date - uses completed_at, started_at, or scheduled_date."""
+        if obj.completed_at:
+            return obj.completed_at.date().isoformat()
+        elif obj.started_at:
+            return obj.started_at.date().isoformat()
+        elif obj.scheduled_date:
+            return obj.scheduled_date.date().isoformat()
+        return obj.created_at.date().isoformat()
 
 
 class ExerciseLogSerializer(serializers.ModelSerializer):
