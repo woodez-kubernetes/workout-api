@@ -45,20 +45,15 @@ service:
   annotations: {}
 # Ingress configuration
 ingress:
-  enabled: false
+  enabled: true
   className: "nginx"
-  annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    # kubernetes.io/tls-acme: "true"
+  annotations: {}
   hosts:
-    - host: workout-api.example.com
+    - host: woodshop.apexkube.xyz
       paths:
         - path: /
           pathType: Prefix
-  tls:
-    - secretName: workout-api-tls
-      hosts:
-        - workout-api.example.com
+  tls: []
 # Resource limits and requests
 resources:
   limits:
@@ -108,7 +103,7 @@ config:
   # Django settings
   django:
     debug: false
-    allowedHosts: "localhost,127.0.0.1,workout-api.example.com"
+    allowedHosts: "localhost,127.0.0.1,woodshop.apexkube.xyz"
     secretKey: "CHANGE-ME-IN-PRODUCTION" # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
     logLevel: "INFO"
   # PostgreSQL database configuration
@@ -120,7 +115,7 @@ config:
     # Password should be set via secret
   # CORS configuration
   cors:
-    allowedOrigins: "http://localhost:3000,http://localhost:8080,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173"
+    allowedOrigins: "http://localhost:3000,http://localhost:8080,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,http://woodshop.apexkube.xyz"
 # Secrets configuration
 # IMPORTANT: These are placeholder values only
 # DO NOT commit real secrets to Git!

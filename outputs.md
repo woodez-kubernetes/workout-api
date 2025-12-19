@@ -132,7 +132,51 @@ kubectl delete pod postgres-statefulset-0 -n woodez-database
 
 ---
 
-### 4. ⚠️ Frontend React Errors (Secondary Issue)
+### 4. ✅ Added: Ingress Controller Configuration
+
+**Task:** Configure ingress controller to expose the workout-api service externally via HTTP.
+
+**Changes Made:**
+
+1. **Created Ingress Template** - [helm/workout-api/templates/ingress.yaml](helm/workout-api/templates/ingress.yaml)
+   - Standard Kubernetes Ingress resource using `networking.k8s.io/v1` API
+   - Conditional rendering based on `ingress.enabled` value
+   - Routes traffic to workout-api service on port 8000
+
+2. **Updated Helm Values** - [helm/workout-api/values.yaml](helm/workout-api/values.yaml)
+   - Line 48: Enabled ingress (`enabled: true`)
+   - Line 49: Set ingress class to `nginx`
+   - Line 52: Configured host as `woodshop.apexkube.xyz`
+   - Line 56: Disabled TLS (`tls: []`) for HTTP-only traffic
+   - Line 111: Added `woodshop.apexkube.xyz` to Django `ALLOWED_HOSTS`
+   - Line 123: Added `http://woodshop.apexkube.xyz` to CORS `allowedOrigins`
+
+3. **Added Date Field to Exercise Log Serializer** - [workouts/serializers.py:247](workouts/serializers.py#L247)
+   - Added computed `date` field to `ExerciseLogListSerializer`
+   - Returns ISO format date (YYYY-MM-DD) extracted from `created_at`
+   - Similar pattern to workout session date field
+
+**Configuration:**
+```yaml
+ingress:
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: woodshop.apexkube.xyz
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []  # HTTP only, no TLS
+```
+
+**Result:**
+- External access via: `http://woodshop.apexkube.xyz`
+- Routes to: `workout-api` service (port 8000) in `woodez-database` namespace
+- Protocol: HTTP (not HTTPS)
+
+---
+
+### 5. ⚠️ Frontend React Errors (Secondary Issue)
 
 **Problem:** Frontend showing errors like:
 - `Workouts.tsx:116: Cannot read properties of undefined (reading 'length')`
