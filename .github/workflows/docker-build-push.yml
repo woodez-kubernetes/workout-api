@@ -1,0 +1,179 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - release-dev
+
+    paths-ignore:
+      - 'helm/workout-api/values.yaml'
+env:
+  DOCKER_IMAGE_NAME: workout-api
+  DOCKER_REGISTRY: docker.io
+
+jobs:
+  build-and-push:
+    name: Build and Push to DockerHub
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # Required to push commits back to repo
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITOPS_PUSH_TOKEN || github.token }}
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Generate image tag
+        id: image_tag
+        run: |
+          # Generate tag (branch-sha format for traceability)
+          TAG="${GITHUB_REF_NAME}-${GITHUB_SHA::7}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Generated image tag: ${TAG}"
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}
+          tags: |
+            # Custom tag format: branch-sha
+            type=raw,value=${{ steps.image_tag.outputs.tag }}
+            # Also tag as 'latest' on release-dev branch for convenience
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/release-dev' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+
+      - name: Image digest
+        run: echo "Image pushed with digest ${{ steps.docker_build.outputs.digest }}"
+
+      - name: Update Helm values with new image tag
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/release-dev'
+        run: |
+          # Use the same tag generated earlier
+          NEW_TAG="${{ steps.image_tag.outputs.tag }}"
+
+          echo "Updating Helm values.yaml with new image tag: ${NEW_TAG}"
+
+          # Install yq if not present
+          if ! command -v yq &> /dev/null; then
+            echo "Installing yq..."
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
+          # Update the image tag in Helm values file using yq
+          yq eval -i ".image.tag = \"${NEW_TAG}\"" helm/workout-api/values.yaml
+
+          # Configure git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+          # Commit and push the change
+          git add helm/workout-api/values.yaml
+          git commit -m "chore(helm): update image tag to ${NEW_TAG}
+
+          Updated by GitHub Actions workflow
+          Commit: ${{ github.sha }}
+          Workflow: ${{ github.workflow }} #${{ github.run_number }}"
+
+          git push
+
+      - name: Create image summary
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "## Docker Image Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Pull Command:**" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Helm Values Updated:** helm/workout-api/values.yaml" >> $GITHUB_STEP_SUMMARY
+  
+  setup_argocd_app:
+    name: Setup ArgoCD Application
+    runs-on: self-hosted
+    needs: [build-and-push]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Clean up ArgoCD
+        run: |
+          if [[ -f "/home/github-runner/argocd" ]]; then
+            echo "Removing existing /home/github-runner/argocd directory"
+            rm -rf /home/github-runner/argocd
+          else
+            echo "/home/github-runner/argocd does not exist, proceeding."
+          fi
+
+      - name: Setup ArgoCD CLI
+        uses: clowdhaus/argo-cd-action@main
+        with:
+          version: 2.13.8
+
+      - name: Login to ArgoCD Server
+        run: |
+          argocd login ${{ secrets.ARGOCD_SERVER }} \
+            --username ${{ secrets.ARGOCD_USERNAME }} \
+            --password ${{ secrets.ARGOCD_PASSWORD }} \
+            --insecure
+
+      - name: Add GitOps Repository to ArgoCD (If not exist)
+        id: add_repo
+        run: |
+          echo "Attempting to add repository: ${{ secrets.GIT_REPO_URL }}"
+          argocd repo add ${{ secrets.GIT_REPO_URL }} || echo "Repository likely already exists in ArgoCD, continuing..."
+
+      - name: Check if Application Exists and Create if Missing
+        run: |
+          APP_NAME="workout-api"
+
+          if argocd app get $APP_NAME &>/dev/null; then
+            echo "ArgoCD Application '$APP_NAME' already exists."
+            argocd app sync $APP_NAME --prune --timeout 300
+            echo "Application synced successfully"
+          else
+            echo "ArgoCD Application $APP_NAME does not exist. Creating.."
+            argocd app create $APP_NAME --file ./argocd/application.yaml --upsert
+
+            echo "Waiting for ArgoCD to finish creating the application..."
+            sleep 10
+
+            echo "Attempting initial sync..."
+            argocd app sync $APP_NAME --prune --timeout 300 || echo "Initial sync may still be processing"
+            echo "Application created and initial sync triggered"
+          fi

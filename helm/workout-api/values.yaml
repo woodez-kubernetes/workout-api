@@ -1,0 +1,139 @@
+# Default values for workout-api
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+# testing
+# Replica count for the API deployment
+replicaCount: 1
+# Container image configuration
+image:
+  # DockerHub repository (replace with your username)
+  repository: kwood475/workout-api
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion
+  tag: "release-dev-3be9a38"
+# Image pull secrets (if using private registry)
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+# Service account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use
+  name: ""
+# Pod annotations
+podAnnotations: {}
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+# Container security context
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+  annotations: {}
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: woodshop.apexkube.xyz
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+# Autoscaling configuration
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+# Node selector
+nodeSelector: {}
+# Tolerations
+tolerations: []
+# Affinity rules
+affinity: {}
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /api/health/
+    port: 8000
+    httpHeaders:
+      - name: Host
+        value: localhost
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+readinessProbe:
+  httpGet:
+    path: /api/health/
+    port: 8000
+    httpHeaders:
+      - name: Host
+        value: localhost
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+# Application configuration
+config:
+  # Django settings
+  django:
+    debug: false
+    allowedHosts: "localhost,127.0.0.1,woodshop.apexkube.xyz"
+    secretKey: "CHANGE-ME-IN-PRODUCTION" # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+    logLevel: "INFO"
+  # PostgreSQL database configuration
+  postgres:
+    host: "postgres-svc"
+    port: 5432
+    database: "woodez-auth"
+    username: "workout_admin"
+    # Password should be set via secret
+  # CORS configuration
+  cors:
+    allowedOrigins: "http://localhost:3000,http://localhost:8080,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,http://woodshop.apexkube.xyz"
+# Secrets configuration
+# IMPORTANT: These are placeholder values only
+# DO NOT commit real secrets to Git!
+#
+# In production, create Kubernetes secrets manually:
+#   kubectl create secret generic workout-api-secrets \
+#     --from-literal=django-secret-key='your-secret-key' \
+#     --from-literal=postgres-password='your-postgres-password' \
+#     -n woodez-database
+#
+# Or use a secrets management tool (Sealed Secrets, External Secrets, Vault, etc.)
+secrets:
+  # Django secret key
+  # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+  djangoSecretKey: "CHANGE-THIS-IN-PRODUCTION"
+  # PostgreSQL password
+  postgresPassword: "jandrew28"
+# Namespace to deploy into
+namespace: woodez-database
+# Environment-specific overrides
+env: production

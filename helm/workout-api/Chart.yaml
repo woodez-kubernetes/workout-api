@@ -1,0 +1,17 @@
+apiVersion: v2
+name: workout-api
+description: A Helm chart for Workout API - Django REST Framework application
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - workout
+  - fitness
+  - api
+  - django
+  - rest-framework
+maintainers:
+  - name: Workout API Team
+home: https://github.com/your-org/workout-api
+sources:
+  - https://github.com/your-org/workout-api
